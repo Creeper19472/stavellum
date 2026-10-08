@@ -2,13 +2,7 @@ import math
 
 import pytest
 
-from stavellum.dynamics import (
-    UnsupportedCurve,
-    infer_dynamics,
-    interpolate_point,
-    volume_gain,
-)
-from stavellum.models import (
+from stavellum.domain.models import (
     AutomationPoint,
     NoteEvent,
     PartMapping,
@@ -16,6 +10,12 @@ from stavellum.models import (
     TrackInfo,
     VolumeAutomation,
     VolumeRoute,
+)
+from stavellum.engraving.dynamics import (
+    UnsupportedCurve,
+    infer_dynamics,
+    interpolate_point,
+    volume_gain,
 )
 
 

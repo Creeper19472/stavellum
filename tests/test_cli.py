@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from stavellum.cli import main
-from stavellum.models import (
+from stavellum.domain.models import (
     NoteEvent,
     PartMapping,
     ProjectDocument,
@@ -40,7 +40,11 @@ def project_file(tmp_path):
 
 @pytest.fixture
 def headless_runners(monkeypatch):
-    from stavellum import export, notation, qt, render, scene
+    from stavellum.engraving import notation
+    from stavellum.exporting import export
+    from stavellum.graphics import qt
+    from stavellum.presentation import scene
+    from stavellum.rendering import render
 
     state = SimpleNamespace(documents=[], prepared=[], renderers=[], saved=True, fail_frame=False)
 

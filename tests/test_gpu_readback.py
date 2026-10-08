@@ -11,17 +11,17 @@ from pathlib import Path
 import pytest
 from native_support import require_vulkan_device
 
-from stavellum._rhi import library_path
+from stavellum.rendering._rhi import library_path
 
 GPU_READBACK_SCRIPT = r'''
 import json, os, sys
 from dataclasses import replace
 from PySide6.QtGui import QColor, QImage
-from stavellum.gpu import GpuBackendError
-from stavellum.models import RenderSettings
-from stavellum.qt import prepare_render_app
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.rendering.gpu import GpuBackendError
+from stavellum.domain.models import RenderSettings
+from stavellum.graphics.qt import prepare_render_app
+from stavellum.rendering.render import FrameRenderer
+from stavellum.presentation.scene import compile_scene
 sys.path.insert(0, "tests")
 from test_render import rendered_document
 

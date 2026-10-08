@@ -9,9 +9,9 @@ import pytest
 from native_frames import frame_layout, frame_state, raster_state
 from test_render import pixels, rendered_document
 
-from stavellum.models import NoteEvent, TrackInfo
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.domain.models import NoteEvent, TrackInfo
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.render import FrameRenderer
 
 pytestmark = pytest.mark.integration
 

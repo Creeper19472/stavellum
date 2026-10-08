@@ -17,9 +17,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QSettings
 
-from stavellum.compilation_cache import CompilationCache
-from stavellum.gui import MainWindow
-from stavellum.models import (
+from stavellum.domain.models import (
     NoteEvent,
     PartMapping,
     ProjectDocument,
@@ -28,9 +26,11 @@ from stavellum.models import (
     TrackInfo,
     save_document,
 )
-from stavellum.qt import ensure_app
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.graphics.qt import ensure_app
+from stavellum.presentation.compilation_cache import CompilationCache
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.render import FrameRenderer
+from stavellum.ui.gui import MainWindow
 
 
 def document_for(bars):

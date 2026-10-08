@@ -17,11 +17,12 @@ from test_gpu import FakeVulkanRenderer
 from test_render import rendered_document
 from test_rhi import FakeTarget
 
-from stavellum._rhi import library_path
-from stavellum.gpu import GpuBackendError
-from stavellum.render import FrameRenderer, _ExportTimes
-from stavellum.rhi import RhiFrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering._rhi import library_path
+from stavellum.rendering.gpu import GpuBackendError
+from stavellum.rendering.render import FrameRenderer
+from stavellum.rendering.rhi import RhiFrameRenderer
+from stavellum.rendering.shared import _ExportTimes
 
 
 class FakeBatchTarget(FakeTarget):
@@ -60,7 +61,7 @@ def batch_scene():
 
 @pytest.fixture
 def fake_batch_target(monkeypatch):
-    monkeypatch.setattr("stavellum.rhi.RhiTarget", FakeBatchTarget)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiTarget", FakeBatchTarget)
     monkeypatch.setenv("STAVELLUM_RHI_BATCH_SIZE", "4")
 
 
@@ -218,7 +219,7 @@ class FakeBatchGpu(FakeVulkanRenderer):
 
 @pytest.fixture
 def production_batch(batch_scene, monkeypatch):
-    monkeypatch.setattr("stavellum.rhi.RhiFrameRenderer", FakeBatchGpu)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiFrameRenderer", FakeBatchGpu)
     renderers = []
 
     def make(backend="auto"):
@@ -386,10 +387,10 @@ from dataclasses import replace
 sys.path.insert(0, "tests")
 from test_render import rendered_document
 from PySide6.QtGui import QImage
-from stavellum.models import RenderSettings
-from stavellum.qt import prepare_render_app
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.domain.models import RenderSettings
+from stavellum.graphics.qt import prepare_render_app
+from stavellum.rendering.render import FrameRenderer
+from stavellum.presentation.scene import compile_scene
 
 os.environ.pop("STAVELLUM_RHI_COPY_READBACK", None)
 os.environ["STAVELLUM_RHI_RGBA_READBACK"] = sys.argv[1]

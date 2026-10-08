@@ -14,10 +14,10 @@ import subprocess
 import time
 from pathlib import Path
 
-from stavellum._frame import FrameEvaluator
-from stavellum.models import load_document
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.domain.models import load_document
+from stavellum.presentation._frame import FrameEvaluator
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.render import FrameRenderer
 
 
 def statistics(values: list[float]) -> dict[str, float]:

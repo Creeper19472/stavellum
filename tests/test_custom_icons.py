@@ -21,18 +21,7 @@ import pytest
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QColor, QImage
 
-from stavellum.icon_picker import LIBRARIES_KEY, IconListModel, IconPicker
-from stavellum.icons import (
-    FONT_AWESOME_VERSION,
-    free_catalog,
-    icon_thumbnail,
-    import_icon,
-    make_icon_asset,
-    resolve_icon,
-    scan_fontawesome,
-    whiten_fontawesome,
-)
-from stavellum.models import (
+from stavellum.domain.models import (
     IconAsset,
     NoteEvent,
     PartMapping,
@@ -43,9 +32,20 @@ from stavellum.models import (
     load_document,
     save_document,
 )
-from stavellum.qt import ensure_app
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.graphics.icons import (
+    FONT_AWESOME_VERSION,
+    free_catalog,
+    icon_thumbnail,
+    import_icon,
+    make_icon_asset,
+    resolve_icon,
+    scan_fontawesome,
+    whiten_fontawesome,
+)
+from stavellum.graphics.qt import ensure_app
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.render import FrameRenderer
+from stavellum.ui.icon_picker import LIBRARIES_KEY, IconListModel, IconPicker
 
 SVG = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><rect width="100" height="50" fill="#f02080" fill-opacity="0.5"/></svg>'
 PRO_SVG = b'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50">
@@ -273,7 +273,7 @@ def test_library_model_only_decodes_requested_thumbnail(tmp_path):
 
 
 def test_showing_whole_library_only_decodes_visible_items(tmp_path, monkeypatch):
-    from stavellum.icons import IconEntry
+    from stavellum.graphics.icons import IconEntry
 
     calls = []
     original = IconEntry.asset
@@ -292,7 +292,7 @@ def test_showing_whole_library_only_decodes_visible_items(tmp_path, monkeypatch)
 
 
 def test_cancelled_scan_survives_dialog_closing_without_changing_selection(tmp_path, monkeypatch):
-    from stavellum import icon_picker
+    from stavellum.ui import icon_picker
 
     started = threading.Event()
     def slow_scan(directory, cancelled):
@@ -354,7 +354,7 @@ def test_picker_remembers_directories_and_reports_missing_libraries(tmp_path):
 
 
 def test_embedded_icon_crosses_real_spawned_preview_worker():
-    from stavellum.background import BackgroundJob
+    from stavellum.ui.background import BackgroundJob
 
     reference, asset = make_icon_asset(SVG, "pink.svg", "image/svg+xml")
     document = document_with_asset(reference, asset)
@@ -382,12 +382,13 @@ import json, subprocess, sys
 from pathlib import Path
 from PySide6.QtCore import QRectF
 from PySide6.QtGui import QImage
-from stavellum.gpu import GpuBackendError
-from stavellum.models import load_document, RenderSettings
-from stavellum.qt import prepare_render_app
-from stavellum.scene import compile_scene
-from stavellum.render import FrameRenderer, RasterFrameRenderer
-from stavellum.export import export_video
+from stavellum.rendering.gpu import GpuBackendError
+from stavellum.domain.models import load_document, RenderSettings
+from stavellum.graphics.qt import prepare_render_app
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.render import FrameRenderer
+from stavellum.rendering.raster import RasterFrameRenderer
+from stavellum.exporting.export import export_video
 
 directory, backend = Path(sys.argv[1]), sys.argv[2]
 prepare_render_app(RenderSettings(render_backend=backend))
@@ -448,7 +449,7 @@ def test_custom_and_fontawesome_icons_in_real_cpu_vulkan_and_mp4(tmp_path, backe
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         pytest.skip("FFmpeg required")
     if backend == "gpu":
-        from stavellum._rhi import library_path
+        from stavellum.rendering._rhi import library_path
 
         if sys.platform != "win32" or not library_path().exists():
             pytest.skip("Windows Vulkan renderer required")

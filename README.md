@@ -156,6 +156,9 @@ For more information, see [FLP / MIDI Import Guide](docs/importing.md).
 
 ## Development and Dependencies
 
+See [Python package architecture](docs/architecture.md) for module responsibilities,
+dependency rules, and the migration from flat Python import paths.
+
 The Rust Vulkan compositor retains the native rendering ABI; the legacy Qt backend remains selectable. The required Rust scene evaluator supplies per-frame camera, layout and activity to both CPU and GPU rendering. A missing or incompatible core DLL fails rendering; graphics fallback still uses Rust scene computation. See [Native build, backend selection and benchmarks](docs/rust-renderer.md).
 
 ```powershell

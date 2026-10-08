@@ -5,9 +5,9 @@ from copy import deepcopy
 
 import pytest
 
-from stavellum.models import NoteEvent, PartMapping, ProjectDocument, ProjectIR, TrackInfo
-from stavellum.notation import build_notation
-from stavellum.scene import compile_scene
+from stavellum.domain.models import NoteEvent, PartMapping, ProjectDocument, ProjectIR, TrackInfo
+from stavellum.engraving.notation import build_notation
+from stavellum.presentation.scene import compile_scene
 
 
 def gate_note(identifier, start, duration, pitch=72, *, track="a", channel=0, velocity=100, **kwargs):

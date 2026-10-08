@@ -9,7 +9,7 @@ import pytest
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QImage, QPainter
 
-from stavellum.musicfont import _metronome_svg, metronome_renderer
+from stavellum.graphics.musicfont import _metronome_svg, metronome_renderer
 
 
 def test_metronome_outline_is_visible_white_and_scales_as_a_vector():

@@ -15,13 +15,14 @@ import pytest
 from frame_reference import _tile_plan, activity_levels, layout_at
 from test_render import colored_activity_document, rendered_document
 
-from stavellum._core import CoreBackendError, CoreTarget, library_path
-from stavellum._frame import FrameEvaluator
-from stavellum.gpu import GpuBackendError
-from stavellum.layout import _CurveKey, _Track
-from stavellum.render import FrameRenderer, RasterFrameRenderer
-from stavellum.rhi import RhiFrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.presentation._core import CoreBackendError, CoreTarget, library_path
+from stavellum.presentation._frame import FrameEvaluator
+from stavellum.presentation.curves import _CurveKey, _Track
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.gpu import GpuBackendError
+from stavellum.rendering.raster import RasterFrameRenderer
+from stavellum.rendering.render import FrameRenderer
+from stavellum.rendering.rhi import RhiFrameRenderer
 
 
 @pytest.fixture(scope="module")
@@ -146,7 +147,7 @@ def test_gpu_initialization_failure_releases_owned_core(core_scene, monkeypatch,
         raise GpuBackendError("graphics initialization failed")
 
     monkeypatch.setattr(FrameEvaluator, "__init__", initialize)
-    monkeypatch.setattr("stavellum.rhi.RhiTarget", fail)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiTarget", fail)
     scene = replace(core_scene, settings=replace(core_scene.settings, render_backend="gpu"))
     with pytest.raises(GpuBackendError, match="initialization failed"):
         (RhiFrameRenderer if direct else FrameRenderer)(scene)
@@ -164,7 +165,7 @@ def test_plain_import_and_inspect_do_not_load_core(tmp_path):
     ]))
     path = tmp_path / "inspect.mid"
     midi.save(path)
-    script = "import stavellum.scene, stavellum.render; from stavellum.cli import main; import sys; sys.exit(main(['inspect',sys.argv[1]]))"
+    script = "import stavellum.presentation.scene, stavellum.rendering.render; from stavellum.cli import main; import sys; sys.exit(main(['inspect',sys.argv[1]]))"
     result = subprocess.run([sys.executable, "-c", script, str(path)], capture_output=True,
                             text=True, encoding="utf-8", errors="replace", timeout=30,
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -177,7 +178,7 @@ def test_rhi_batch_plan_and_commands_share_evaluator(core_scene, monkeypatch):
     # The GPU capability is irrelevant to the scene evaluator ownership contract.
     from test_rhi import FakeTarget
 
-    monkeypatch.setattr("stavellum.rhi.RhiTarget", FakeTarget)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiTarget", FakeTarget)
     with RasterFrameRenderer(core_scene) as assets:
         with RhiFrameRenderer(core_scene, assets=assets) as renderer:
             renderer.batch_plan(3)
@@ -193,7 +194,7 @@ def test_rhi_batch_plan_and_commands_share_evaluator(core_scene, monkeypatch):
 def test_core_failure_propagates_without_gpu_fallback(core_scene, monkeypatch):
     from test_rhi import FakeTarget
 
-    monkeypatch.setattr("stavellum.rhi.RhiTarget", FakeTarget)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiTarget", FakeTarget)
     scene = replace(core_scene, settings=replace(core_scene.settings, render_backend="auto"))
     with FrameRenderer(scene) as renderer:
         def fail(*args):
@@ -231,7 +232,7 @@ def test_gpu_recovery_reports_current_shared_core_counters(core_scene, monkeypat
         def render(self, commands):
             raise GpuBackendError("lost device")
 
-    monkeypatch.setattr("stavellum.rhi.RhiTarget", LostTarget)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiTarget", LostTarget)
     scene = replace(core_scene, settings=replace(core_scene.settings, render_backend="auto"))
     with FrameRenderer(scene) as renderer:
         renderer.render_frame(3)
@@ -251,7 +252,7 @@ def test_graphics_cleanup_failure_still_releases_core(core_scene, monkeypatch, d
         def close(self):
             raise GpuBackendError("graphics cleanup failed")
 
-    monkeypatch.setattr("stavellum.rhi.RhiTarget", FailedCloseTarget)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiTarget", FailedCloseTarget)
     scene = replace(core_scene, settings=replace(core_scene.settings, render_backend="gpu"))
     renderer = RhiFrameRenderer(scene) if direct else FrameRenderer(scene)
     evaluator = renderer._assets._evaluator if direct else renderer._evaluator

@@ -2,11 +2,11 @@
 
 The native compositor lives in `native/rust-renderer`. It is written directly
 against Vulkan through `ash` — no Qt RHI, no wgpu, no C++ — and keeps the exact
-`sprhi_*` C ABI (version 3) that `src/stavellum/_rhi.py` loads. The
+`sprhi_*` C ABI (version 3) that `src/stavellum/rendering/_rhi.py` loads. The
 application still uses Python/PySide6 for imports, notation, layout and UI.
 
 The required `native/rust-core` library exposes `spcore_*` ABI version 1
-through `src/stavellum/_core.py`. A renderer-owned `FrameEvaluator` serializes
+through `src/stavellum/presentation/_core.py`. A renderer-owned `FrameEvaluator` serializes
 compiled curves and notes once, then evaluates camera position, layout rows,
 activity and tile-plan geometry with one native call per uncached time point.
 CPU and Vulkan rendering share the same evaluator, including GPU-to-CPU recovery.

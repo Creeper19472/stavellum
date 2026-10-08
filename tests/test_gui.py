@@ -16,11 +16,8 @@ from PySide6.QtGui import QColor, QImage
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtWidgets import QApplication, QComboBox, QGroupBox, QScrollArea
 
-from stavellum import gui as gui_module
-from stavellum.background import BackgroundJob
-from stavellum.gui import MainWindow
-from stavellum.mapping import activity_color
-from stavellum.models import (
+from stavellum.domain.mapping import activity_color
+from stavellum.domain.models import (
     ANIMATION_DURATIONS,
     ANIMATION_PRESETS,
     Metadata,
@@ -32,6 +29,9 @@ from stavellum.models import (
     load_document,
     save_document,
 )
+from stavellum.ui import gui as gui_module
+from stavellum.ui.background import BackgroundJob
+from stavellum.ui.gui import MainWindow
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -62,7 +62,7 @@ def document():
 
 
 def embedded_test_icon(window):
-    from stavellum.icons import make_icon_asset
+    from stavellum.graphics.icons import make_icon_asset
 
     reference, asset = make_icon_asset(
         b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="red"/></svg>',
@@ -152,8 +152,8 @@ def test_embedded_icon_survives_merge_split_and_reimport(window):
 
 @pytest.mark.parametrize("accepted", [True, False])
 def test_icon_picker_only_changes_project_on_accept(window, monkeypatch, accepted):
-    from stavellum import icon_picker
-    from stavellum.icons import make_icon_asset
+    from stavellum.graphics.icons import make_icon_asset
+    from stavellum.ui import icon_picker
 
     selection = make_icon_asset(
         b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5"/></svg>',
@@ -227,7 +227,7 @@ def test_file_and_export_menus_follow_document_and_worker_state(window):
 
 @pytest.mark.parametrize("size,sidebar_width", [((1480, 920), 470), ((1000, 700), 420)])
 def test_grouped_tabs_remain_accessible_in_narrow_sidebar(window, app, size, sidebar_width):
-    from stavellum.qt import ensure_app
+    from stavellum.graphics.qt import ensure_app
 
     ensure_app()
     window.resize(*size)
@@ -437,7 +437,7 @@ def test_reimport_enables_simplification_for_new_parts_and_preserves_existing_ch
 
 
 def test_renderer_resources_close_on_replace_project_switch_failure_and_exit(window, monkeypatch):
-    from stavellum import render
+    from stavellum.rendering import render
 
     class Renderer:
         render_backend = "cpu"
@@ -490,8 +490,8 @@ def test_renderer_resources_close_on_replace_project_switch_failure_and_exit(win
 
 
 def test_unchanged_preview_keeps_renderer_and_saved_edits_still_update(window, tmp_path, monkeypatch):
-    from stavellum.compilation_cache import preview_key
-    from stavellum.scene import compile_scene
+    from stavellum.presentation.compilation_cache import preview_key
+    from stavellum.presentation.scene import compile_scene
 
     window.render_backend.setCurrentIndex(window.render_backend.findData("cpu"))
     assert window._gather_document()
@@ -516,7 +516,7 @@ def test_unchanged_preview_keeps_renderer_and_saved_edits_still_update(window, t
 
 @pytest.mark.parametrize("failure", ["initialization", "first-frame"])
 def test_replacement_failure_keeps_previous_preview(window, monkeypatch, failure):
-    from stavellum import render
+    from stavellum.rendering import render
 
     image = QImage(320, 240, QImage.Format.Format_RGBA8888)
     image.fill(Qt.GlobalColor.black)
@@ -551,7 +551,7 @@ def test_replacement_failure_keeps_previous_preview(window, monkeypatch, failure
 
 
 def test_gui_prepares_vulkan_platform_before_constructing_the_window(monkeypatch):
-    from stavellum import qt
+    from stavellum.graphics import qt
 
     events = []
     application = SimpleNamespace(
@@ -1318,7 +1318,7 @@ def test_silent_preview_transport_includes_tail_extended_by_quantization(app, do
 
 @pytest.mark.integration
 def test_reimport_arco_only_preserves_corrections_and_removes_pizz_articulation(window):
-    from stavellum.scene import compile_scene
+    from stavellum.presentation.scene import compile_scene
 
     window.document.mappings = [PartMapping(
         "custom-violin", "Violin I 校正", ["violin", "pizz"], instrument="violin",
@@ -1347,7 +1347,7 @@ def test_reimport_arco_only_preserves_corrections_and_removes_pizz_articulation(
 
 @pytest.mark.integration
 def test_reimport_suggestion_prunes_tracks_already_owned_by_retained_mapping(window):
-    from stavellum.scene import compile_scene
+    from stavellum.presentation.scene import compile_scene
 
     window.document.mappings = [window.document.mappings[0]]
     window.document.mappings[0].part_id = "part-violin"

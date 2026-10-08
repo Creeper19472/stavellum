@@ -11,18 +11,20 @@ import time
 import zlib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
+from importlib.resources import files
 
 import pytest
 from test_render import pixels
 from test_scene import score_document
 
-from stavellum import compilation_cache as cache_module
-from stavellum import notation, scene
-from stavellum.background import BackgroundJob
-from stavellum.compilation_cache import CompilationCache, geometry_key, timeline_key
-from stavellum.models import Diagnostic, NoteEvent, VolumeRoute, load_document, save_document
-from stavellum.qt import ensure_app
-from stavellum.render import FrameRenderer
+from stavellum.domain.models import Diagnostic, NoteEvent, VolumeRoute, load_document, save_document
+from stavellum.engraving import notation
+from stavellum.graphics.qt import ensure_app
+from stavellum.presentation import compilation_cache as cache_module
+from stavellum.presentation import scene
+from stavellum.presentation.compilation_cache import CompilationCache, geometry_key, timeline_key
+from stavellum.rendering.render import FrameRenderer
+from stavellum.ui.background import BackgroundJob
 
 
 @pytest.fixture
@@ -37,6 +39,23 @@ def document():
 def hits(compiled):
     report = compiled.compilation_report
     return report["geometry_cache_hit"], report["timeline_cache_hit"]
+
+
+def test_extracted_curve_source_change_invalidates_both_cache_layers(document, tmp_path, monkeypatch):
+    package = tmp_path / "package"
+    shutil.copytree(files("stavellum"), package, ignore=shutil.ignore_patterns("__pycache__"))
+    monkeypatch.setattr(cache_module, "files", lambda name: package)
+    cache_module.engine_fingerprint.cache_clear()
+    try:
+        assert hits(scene.compile_scene(document)) == (False, False)
+        assert hits(scene.compile_scene(document)) == (True, True)
+        curves = package / "presentation/curves.py"
+        curves.write_bytes(curves.read_bytes() + b"\n# changed curve implementation\n")
+        cache_module.engine_fingerprint.cache_clear()
+        assert hits(scene.compile_scene(document)) == (False, False)
+        assert hits(scene.compile_scene(document)) == (True, True)
+    finally:
+        cache_module.engine_fingerprint.cache_clear()
 
 
 def test_warm_cache_skips_both_compilers_and_refreshes_display_data(document, monkeypatch):
@@ -342,7 +361,7 @@ def test_spawned_workers_share_cache(document):
 def test_preview_cache_and_uncached_video_produce_identical_decoded_frames(document, tmp_path, monkeypatch):
     import wave
 
-    from stavellum import export
+    from stavellum.exporting import export
 
     document.project.notes = document.project.notes[:2]
     document.project.duration_ticks = 240

@@ -13,9 +13,7 @@ from PySide6.QtCore import QObject, QUrl, Signal
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtWidgets import QApplication
 
-from stavellum import background, gui, notation, qt
-from stavellum.audio import AUDIO_FILE_FILTER
-from stavellum.models import (
+from stavellum.domain.models import (
     Metadata,
     NoteEvent,
     PartMapping,
@@ -23,7 +21,11 @@ from stavellum.models import (
     ProjectIR,
     TrackInfo,
 )
-from stavellum.progress import ExportProgress
+from stavellum.domain.progress import ExportProgress
+from stavellum.engraving import notation
+from stavellum.exporting.audio import AUDIO_FILE_FILTER
+from stavellum.graphics import qt
+from stavellum.ui import background, gui
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 

@@ -10,9 +10,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication
 
-from stavellum import progress_dialog as dialog_module
-from stavellum.progress import ExportProgress
-from stavellum.progress_dialog import ExportProgressDialog
+from stavellum.domain.progress import ExportProgress
+from stavellum.ui import progress_dialog as dialog_module
+from stavellum.ui.progress_dialog import ExportProgressDialog
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 

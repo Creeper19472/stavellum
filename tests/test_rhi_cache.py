@@ -10,7 +10,7 @@ from native_frames import frame_layout, frame_state
 from test_render_cache import dense_scene as dense_scene
 from test_rhi import FakeTarget
 
-from stavellum.rhi import RhiFrameRenderer
+from stavellum.rendering.rhi import RhiFrameRenderer
 
 pytestmark = pytest.mark.integration
 
@@ -30,7 +30,7 @@ class InspectingTarget(FakeTarget):
 
 @pytest.fixture
 def fake_native(monkeypatch):
-    monkeypatch.setattr("stavellum.rhi.RhiTarget", InspectingTarget)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiTarget", InspectingTarget)
 
 
 def command_pixels(renderer, seconds):

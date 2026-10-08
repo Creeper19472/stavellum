@@ -8,9 +8,9 @@ import pytest
 from PySide6.QtGui import QImage
 from test_render import pixels, rendered_document
 
-from stavellum.gpu import GpuBackendError
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.gpu import GpuBackendError
+from stavellum.rendering.render import FrameRenderer
 
 
 @pytest.fixture(scope="module")
@@ -45,7 +45,7 @@ def test_unavailable_vulkan_auto_falls_back_and_explicit_gpu_fails(cpu_scene, mo
     def unavailable(*args, **kwargs):
         raise GpuBackendError("test Vulkan device unavailable")
 
-    monkeypatch.setattr("stavellum.rhi.RhiFrameRenderer", unavailable)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiFrameRenderer", unavailable)
     cpu_scene.settings.render_backend = "auto"
     with FrameRenderer(cpu_scene) as renderer:
         assert not renderer.render_frame(.5).isNull()
@@ -68,7 +68,7 @@ def test_mid_frame_vulkan_failure_retries_same_frame_once_and_retains_tiles(cpu_
             super()._render(seconds)
             raise GpuBackendError("test Vulkan device lost after drawing")
 
-    monkeypatch.setattr("stavellum.rhi.RhiFrameRenderer", LostRenderer)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiFrameRenderer", LostRenderer)
     cpu_scene.settings.render_backend = "auto"
     with FrameRenderer(cpu_scene) as renderer:
         gpu = renderer._gpu
@@ -107,7 +107,7 @@ def test_drawing_errors_are_not_hidden_by_auto_fallback(cpu_scene, monkeypatch):
         def _render(self, seconds):
             raise ValueError("application drawing error")
 
-    monkeypatch.setattr("stavellum.rhi.RhiFrameRenderer", BugRenderer)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiFrameRenderer", BugRenderer)
     cpu_scene.settings.render_backend = "auto"
     with FrameRenderer(cpu_scene) as renderer:
         with pytest.raises(ValueError, match="application drawing error"):
@@ -129,7 +129,7 @@ def test_logo_survives_vulkan_failure_with_cached_image_and_same_absolute_time(c
             self.logo = self.assets._logo[0]
             raise GpuBackendError("test Vulkan device lost with logo")
 
-    monkeypatch.setattr("stavellum.rhi.RhiFrameRenderer", LostRenderer)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiFrameRenderer", LostRenderer)
     with FrameRenderer(replace(scene, settings=replace(settings, render_backend="auto"))) as renderer:
         gpu = renderer._gpu
         assert pixels(renderer.render_frame(6.4)) == expected

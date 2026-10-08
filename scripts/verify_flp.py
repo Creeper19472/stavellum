@@ -16,9 +16,9 @@ from fractions import Fraction
 from pathlib import Path
 from time import perf_counter
 
+from stavellum.domain.mapping import suggest_mappings
+from stavellum.domain.models import Metadata, ProjectDocument, ProjectIR
 from stavellum.importers import ImportFailure, import_project
-from stavellum.mapping import suggest_mappings
-from stavellum.models import Metadata, ProjectDocument, ProjectIR
 
 
 def _musical_events(project: ProjectIR) -> Counter:
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.confirm_fixed_timing:
             project.timing_confirmed = True
         if args.compile:
-            from stavellum.notation import build_notation
+            from stavellum.engraving.notation import build_notation
 
             begin = perf_counter()
             document = ProjectDocument(project, mappings, metadata=Metadata(project.name))

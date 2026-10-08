@@ -8,9 +8,9 @@ from PySide6.QtGui import QColor, QImage
 from test_gpu import FakeVulkanRenderer
 from test_render import rendered_document
 
-from stavellum.gpu import GpuBackendError
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.gpu import GpuBackendError
+from stavellum.rendering.render import FrameRenderer
 
 
 @pytest.fixture(scope="module")
@@ -50,7 +50,7 @@ class FakeRenderer(FakeVulkanRenderer):
 
 @pytest.fixture
 def fake_renderer(stream_scene, monkeypatch):
-    monkeypatch.setattr("stavellum.rhi.RhiFrameRenderer", FakeRenderer)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiFrameRenderer", FakeRenderer)
     renderers = []
 
     def make(*, backend="auto"):

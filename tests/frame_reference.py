@@ -2,8 +2,9 @@
 
 import math
 
-from stavellum.layout import FrameLayout, RowLayout, ease
-from stavellum.render import TilePlan
+from stavellum.presentation.curves import ease
+from stavellum.presentation.timeline import FrameLayout, RowLayout
+from stavellum.rendering.raster import TilePlan
 
 ACTIVITY_ATTACK_SECONDS = 0.1
 ACTIVITY_RELEASE_SECONDS = 0.12

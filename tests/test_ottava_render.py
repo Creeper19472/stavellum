@@ -13,8 +13,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtSvg import QSvgRenderer
 from test_rhi import FakeTarget
 
-from stavellum import notation
-from stavellum.models import (
+from stavellum.domain.models import (
     NoteEvent,
     PartMapping,
     ProjectDocument,
@@ -22,10 +21,11 @@ from stavellum.models import (
     RenderSettings,
     TrackInfo,
 )
-from stavellum.ottava import OctaveSpan
-from stavellum.render import RasterFrameRenderer
-from stavellum.rhi import RhiFrameRenderer
-from stavellum.scene import _bounds, compile_scene
+from stavellum.engraving import notation
+from stavellum.engraving.ottava import OctaveSpan
+from stavellum.presentation.scene import _bounds, compile_scene
+from stavellum.rendering.raster import RasterFrameRenderer
+from stavellum.rendering.rhi import RhiFrameRenderer
 
 
 @pytest.fixture
@@ -211,7 +211,7 @@ def test_rhi_uses_same_cached_reminder_asset_position_mask_and_opacity(octave_sc
     layout = frame_layout(scene, 5)
     layout = replace(layout, rows={part.part_id: replace(layout.rows[part.part_id], opacity=0.4)})
     world = (mark.label_right + mark.end_x) / 2 + (scene.play_x - scene.body_left) / layout.scale
-    monkeypatch.setattr("stavellum.rhi.RhiTarget", FakeTarget)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiTarget", FakeTarget)
     with RasterFrameRenderer(scene) as assets, RhiFrameRenderer(scene, assets=assets) as renderer:
         state = assets._evaluator.evaluate(5)
         monkeypatch.setattr(assets._evaluator, "evaluate",

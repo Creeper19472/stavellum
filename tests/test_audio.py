@@ -11,7 +11,7 @@ import wave
 
 import pytest
 
-from stavellum import audio
+from stavellum.exporting import audio
 
 
 @pytest.fixture

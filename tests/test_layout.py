@@ -11,16 +11,11 @@ import sys
 import pytest
 from native_frames import activity_level, frame_layout
 
-from stavellum.layout import _CurveKey, _Track
-from stavellum.models import Metadata, RenderSettings
-from stavellum.scene import (
-    ActiveNote,
-    CompiledScene,
-    ScenePart,
-    TimeAxis,
-    compile_visibility,
-    part_state,
-)
+from stavellum.domain.models import Metadata, RenderSettings
+from stavellum.presentation.curves import _CurveKey, _Track
+from stavellum.presentation.scene import TimeAxis
+from stavellum.presentation.types import ActiveNote, CompiledScene, ScenePart
+from stavellum.presentation.visibility import compile_visibility, part_state
 
 
 def layout_scene(*, count=10, bpm=120, late=(), grand=False, stable_seconds=2.0):
@@ -551,7 +546,7 @@ def test_sub_frame_admission_deadlines_do_not_stall_the_event_heap():
 import runpy, sys
 sys.path.insert(0, "tests")
 from native_frames import frame_layout
-from stavellum.scene import compile_visibility
+from stavellum.presentation.visibility import compile_visibility
 scene = runpy.run_path('tests/test_layout.py')['layout_scene'](
     count=1, bpm=60000, late=(24, 28, 32, 36))
 scene.settings.enter_seconds = 0.000001

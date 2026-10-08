@@ -3,11 +3,11 @@
 from dataclasses import replace
 from types import SimpleNamespace
 
-from stavellum._frame import FrameEvaluator
-from stavellum.axis import TimeAxis
-from stavellum.camera import CameraTimeline
-from stavellum.layout import _CurveKey, _Track
-from stavellum.models import RenderSettings
+from stavellum.domain.models import RenderSettings
+from stavellum.presentation._frame import FrameEvaluator
+from stavellum.presentation.axis import TimeAxis
+from stavellum.presentation.camera import CameraTimeline
+from stavellum.presentation.curves import _CurveKey, _Track
 
 _evaluators = {}
 _activity_scenes = {}

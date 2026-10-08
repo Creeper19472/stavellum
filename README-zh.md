@@ -156,6 +156,8 @@ uv run stavellum parts "song.stproj" --output artifacts/parts
 
 ## 开发与依赖
 
+各子包职责、依赖规则与 Python 导入路径迁移说明见[代码结构文档](docs/architecture.md)。
+
 Rust Vulkan 合成器保持原生渲染 ABI 兼容，传统 Qt 后端仍可显式选择。Rust 场景计算库是运行必需依赖，CPU 与 GPU 渲染统一使用它计算每帧相机、布局及活动状态。DLL 缺失或 ABI 不兼容时明确报错；GPU 回退 CPU 后仍使用 Rust 场景计算。构建、后端选择与基准方法见 [原生渲染说明](docs/rust-renderer.md)。
 
 ```powershell

@@ -12,9 +12,9 @@ from types import SimpleNamespace
 import pytest
 from PySide6.QtGui import QImage
 
-from stavellum import export
-from stavellum.models import RenderSettings
-from stavellum.progress import ProgressReporter
+from stavellum.domain.models import RenderSettings
+from stavellum.domain.progress import ProgressReporter
+from stavellum.exporting import export
 
 
 class RecordingPipe:

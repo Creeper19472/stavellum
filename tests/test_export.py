@@ -11,8 +11,7 @@ import numpy as np
 import pytest
 from native_frames import frame_layout
 
-from stavellum.export import audio_duration, export_video
-from stavellum.models import (
+from stavellum.domain.models import (
     Metadata,
     NoteEvent,
     PartMapping,
@@ -21,8 +20,9 @@ from stavellum.models import (
     RenderSettings,
     TrackInfo,
 )
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.exporting.export import audio_duration, export_video
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.render import FrameRenderer
 
 pytestmark = [pytest.mark.integration, pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg required")]
 

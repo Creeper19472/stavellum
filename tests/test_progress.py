@@ -5,7 +5,7 @@ from dataclasses import replace
 
 import pytest
 
-from stavellum.progress import ExportEstimator, ExportProgress, ProgressReporter
+from stavellum.domain.progress import ExportEstimator, ExportProgress, ProgressReporter
 
 
 def frame(elapsed, completed, **kwargs):

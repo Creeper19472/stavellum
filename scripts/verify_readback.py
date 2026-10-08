@@ -18,12 +18,12 @@ from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 
-from stavellum.encoding import probe_nvenc, video_arguments
-from stavellum.export import _encode_attempt, audio_duration
-from stavellum.models import load_document
-from stavellum.qt import prepare_render_app
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.domain.models import load_document
+from stavellum.exporting.encoding import probe_nvenc, video_arguments
+from stavellum.exporting.export import _encode_attempt, audio_duration
+from stavellum.graphics.qt import prepare_render_app
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.render import FrameRenderer
 
 
 @contextmanager

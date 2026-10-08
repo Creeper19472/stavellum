@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from stavellum.mapping import activity_color
-from stavellum.models import (
+from stavellum.domain.mapping import activity_color
+from stavellum.domain.models import (
     ANIMATION_DURATIONS,
     ANIMATION_PRESETS,
     AutomationPoint,

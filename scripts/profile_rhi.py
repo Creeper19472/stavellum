@@ -21,10 +21,10 @@ from pathlib import Path
 
 from PySide6.QtGui import QImage
 
-from stavellum.models import load_document
-from stavellum.qt import prepare_render_app
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.domain.models import load_document
+from stavellum.graphics.qt import prepare_render_app
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.render import FrameRenderer
 
 _baseline_spec = importlib.util.spec_from_file_location("_benchmark_baseline", Path(__file__).with_name("_baseline.py"))
 _baseline = importlib.util.module_from_spec(_baseline_spec)
@@ -231,8 +231,9 @@ def main():
     write_report(destination, report)
     try:
         report["source_sha256"] = {name: fingerprint(ROOT / path) for name, path in {
-            "render": "src/stavellum/render.py", "rhi": "src/stavellum/rhi.py",
-            "rhi_abi": "src/stavellum/_rhi.py", "native": "native/rhi/rhi.cpp"}.items()}
+            "render": "src/stavellum/rendering/render.py", "raster": "src/stavellum/rendering/raster.py",
+            "shared": "src/stavellum/rendering/shared.py", "rhi": "src/stavellum/rendering/rhi.py",
+            "rhi_abi": "src/stavellum/rendering/_rhi.py", "native": "native/rhi/rhi.cpp"}.items()}
         modes = args.modes or ["rhi-vulkan"]
         if args.baseline_ref and not args.modes:
             modes += ["baseline-opengl"]

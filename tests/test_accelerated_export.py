@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from stavellum._rhi import library_path
+from stavellum.rendering._rhi import library_path
 
 ACCELERATED_SCRIPT = r'''
 import json
@@ -18,12 +18,12 @@ import os
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path.cwd() / "tests"))
-from stavellum.encoding import probe_nvenc
-from stavellum.gpu import GpuBackendError
-from stavellum.models import RenderSettings
-from stavellum.qt import prepare_render_app
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.exporting.encoding import probe_nvenc
+from stavellum.rendering.gpu import GpuBackendError
+from stavellum.domain.models import RenderSettings
+from stavellum.graphics.qt import prepare_render_app
+from stavellum.rendering.render import FrameRenderer
+from stavellum.presentation.scene import compile_scene
 import test_export
 from test_render import rendered_document
 import shutil

@@ -5,7 +5,7 @@ from copy import deepcopy
 import pytest
 from test_models import project_document
 
-from stavellum.models import ProjectDocument, load_document, save_document
+from stavellum.domain.models import ProjectDocument, load_document, save_document
 
 
 def test_acceleration_and_recognition_settings_roundtrip(tmp_path):

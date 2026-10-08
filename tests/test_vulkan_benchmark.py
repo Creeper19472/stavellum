@@ -64,7 +64,7 @@ def test_gpu_identity_does_not_confuse_api_prefixes_or_accept_software():
 
 
 def test_failed_quality_rerun_replaces_previous_success_report(tmp_path, monkeypatch):
-    from stavellum.models import RenderSettings
+    from stavellum.domain.models import RenderSettings
     destination = tmp_path / "benchmark.json"
     destination.write_text('{"status":"complete","results":["old"]}', encoding="utf-8")
     document = SimpleNamespace(settings=RenderSettings(), validate=lambda: None)

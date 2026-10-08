@@ -432,8 +432,8 @@ def _native_volume_evidence():
 
 
 def test_flp_smooth_interpolation_matches_independent_native_wav_observations():
-    from stavellum.dynamics import interpolate_point
-    from stavellum.models import AutomationPoint
+    from stavellum.domain.models import AutomationPoint
+    from stavellum.engraving.dynamics import interpolate_point
 
     evidence = _native_volume_evidence()
     for case in evidence["automation_clip"]["single_curve"]["cases"]:
@@ -460,8 +460,8 @@ def test_flp_native_e223_fixture_uses_integer_values_and_interleaved_absolute_ti
 
 
 def test_flp_native_sparse_pattern_platforms_are_steps_and_dense_draw_becomes_hairpin():
-    from stavellum.dynamics import infer_dynamics
-    from stavellum.models import NoteEvent, PartMapping, ProjectIR, TrackInfo, VolumeRoute
+    from stavellum.domain.models import NoteEvent, PartMapping, ProjectIR, TrackInfo, VolumeRoute
+    from stavellum.engraving.dynamics import infer_dynamics
 
     evidence = _native_volume_evidence()
     native = evidence["pattern_events"]

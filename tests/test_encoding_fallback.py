@@ -16,8 +16,7 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage
 
-from stavellum import encoding, export, qt
-from stavellum.models import (
+from stavellum.domain.models import (
     NoteEvent,
     PartMapping,
     ProjectDocument,
@@ -25,6 +24,8 @@ from stavellum.models import (
     RenderSettings,
     TrackInfo,
 )
+from stavellum.exporting import encoding, export
+from stavellum.graphics import qt
 
 
 @pytest.mark.parametrize(("details", "expected"), [

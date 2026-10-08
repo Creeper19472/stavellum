@@ -7,7 +7,7 @@ import pytest
 from music21 import chord, clef, converter, dynamics, key, note, spanner, stream
 from pypdf import PdfReader
 
-from stavellum.models import (
+from stavellum.domain.models import (
     AutomationPoint,
     Metadata,
     NoteEvent,
@@ -18,14 +18,14 @@ from stavellum.models import (
     VolumeAutomation,
     VolumeRoute,
 )
-from stavellum.notation import (
+from stavellum.engraving.notation import (
     _spelled_pitch,
     _toolkit,
     _write_pdf,
     build_notation,
     export_parts,
 )
-from stavellum.svg import SVG_NS, normalize_svg
+from stavellum.graphics.svg import SVG_NS, normalize_svg
 
 
 def document(notes, mappings=None, *, ppq=480, duration_ticks=0):

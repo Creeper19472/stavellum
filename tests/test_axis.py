@@ -7,7 +7,7 @@ import pickle
 
 import pytest
 
-from stavellum.axis import TimeAxis
+from stavellum.presentation.axis import TimeAxis
 
 
 @pytest.mark.parametrize("beats,xs", [

@@ -16,16 +16,15 @@ DLL = ROOT / "src/stavellum/native/rhi/stavellum_rust.dll"
 
 
 def test_installed_rust_library_precedes_legacy(tmp_path, monkeypatch):
-    from stavellum import _rhi
+    from stavellum.rendering import _rhi
 
-    module = tmp_path / "src/stavellum/_rhi.py"
-    module.parent.mkdir(parents=True)
-    module.touch()
-    resources = module.parent / "native/rhi"
+    package = tmp_path / "src/stavellum"
+    package.mkdir(parents=True)
+    resources = package / "native/rhi"
     resources.mkdir(parents=True)
     for name in ("stavellum_rust.dll", "stavellum_rhi.dll"):
         (resources / name).touch()
-    monkeypatch.setattr(_rhi, "__file__", str(module))
+    monkeypatch.setattr(_rhi, "files", lambda name: package)
     monkeypatch.delenv("STAVELLUM_RHI_DLL", raising=False)
     assert _rhi.library_path() == resources / "stavellum_rust.dll"
 
@@ -118,7 +117,7 @@ def test_rust_abi_geometry_sizes():
 def test_repeated_device_creation_releases_vulkan_handles():
     require_vulkan_device()
     script = r'''
-from stavellum._rhi import RhiTarget
+from stavellum.rendering._rhi import RhiTarget
 for index in range(160):
     target = RhiTarget(64, 64, 1, "vulkan")
     target.close()

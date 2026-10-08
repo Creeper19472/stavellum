@@ -9,9 +9,9 @@ import pytest
 from music21 import chord, converter, note, pitch, spanner
 from pypdf import PdfReader
 
-from stavellum.models import NoteEvent, PartMapping, ProjectDocument, ProjectIR, TrackInfo
-from stavellum.notation import _toolkit, _xml, build_notation, export_parts
-from stavellum.scene import compile_scene
+from stavellum.domain.models import NoteEvent, PartMapping, ProjectDocument, ProjectIR, TrackInfo
+from stavellum.engraving.notation import _toolkit, _xml, build_notation, export_parts
+from stavellum.presentation.scene import compile_scene
 
 
 def document(pitches, *, starts=None, durations=None, **options):

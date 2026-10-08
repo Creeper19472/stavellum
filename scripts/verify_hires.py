@@ -20,13 +20,13 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
-import stavellum.scene as scene_module
-from stavellum.encoding import probe_nvenc, video_arguments
-from stavellum.export import _encode_attempt
-from stavellum.models import load_document
-from stavellum.qt import prepare_render_app
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+import stavellum.presentation.visibility as visibility_module
+from stavellum.domain.models import load_document
+from stavellum.exporting.encoding import probe_nvenc, video_arguments
+from stavellum.exporting.export import _encode_attempt
+from stavellum.graphics.qt import prepare_render_app
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.render import FrameRenderer
 
 _baseline_spec = importlib.util.spec_from_file_location("_benchmark_baseline", Path(__file__).with_name("_baseline.py"))
 _baseline = importlib.util.module_from_spec(_baseline_spec)
@@ -43,7 +43,7 @@ def percentile(values, fraction):
 
 def baseline_module(ref, directory, name):
     package, _ = load_package(ref, directory / "baseline-source")
-    return importlib.import_module(f"{package.__name__}.{name}")
+    return _baseline.module(package, name)
 
 
 class OffsetRenderer:
@@ -147,7 +147,7 @@ def main():
     if args.baseline_layout:
         if not args.baseline_ref:
             parser.error("--baseline-layout requires --baseline-ref")
-        scene_module.compile_layout = baseline_module(args.baseline_ref, directory, "layout").compile_layout
+        visibility_module.compile_layout = baseline_module(args.baseline_ref, directory, "layout").compile_layout
     report = {"project": args.project.name, "baseline_ref": args.baseline_ref,
               "layout": "baseline" if args.baseline_layout else "current",
               "preview_warmup": "initial_frame_only",

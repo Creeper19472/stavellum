@@ -9,7 +9,7 @@ import pytest
 from native_frames import activity_level, activity_levels, frame_layout
 from PySide6.QtSvg import QSvgRenderer
 
-from stavellum.models import (
+from stavellum.domain.models import (
     Metadata,
     NoteEvent,
     PartMapping,
@@ -18,16 +18,10 @@ from stavellum.models import (
     RenderSettings,
     TrackInfo,
 )
-from stavellum.qt import ensure_app
-from stavellum.scene import (
-    ActiveNote,
-    ScenePart,
-    _anchor_x,
-    _axis_from_anchors,
-    _svg_index,
-    compile_scene,
-    part_state,
-)
+from stavellum.graphics.qt import ensure_app
+from stavellum.presentation.scene import _anchor_x, _axis_from_anchors, _svg_index, compile_scene
+from stavellum.presentation.types import ActiveNote, ScenePart
+from stavellum.presentation.visibility import part_state
 
 pytestmark = pytest.mark.integration
 
@@ -204,7 +198,7 @@ def test_conflicting_actual_onsets_are_reported_instead_of_silently_dropped():
 
 
 def test_long_rest_geometry_never_removes_other_parts_note_onsets(monkeypatch):
-    from stavellum import notation as notation_module
+    from stavellum.engraving import notation as notation_module
 
     document = score_document(target_notes=((0, .5), (3, .5)), bars=2)
     engraved = notation_module.build_notation(document)

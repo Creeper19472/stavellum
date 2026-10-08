@@ -177,7 +177,7 @@ def helpers():
 
 
 def load_document_for_run(project, width, height):
-    from stavellum.models import load_document
+    from stavellum.domain.models import load_document
 
     document = load_document(project)
     document.settings = replace(document.settings, width=width, height=height, fps=60,
@@ -201,8 +201,8 @@ def check_backend(report, frames):
 
 
 def compiled_worker(spec):
-    from stavellum.qt import prepare_render_app
-    from stavellum.scene import compile_scene
+    from stavellum.graphics.qt import prepare_render_app
+    from stavellum.presentation.scene import compile_scene
 
     document = load_document_for_run(spec["project"], spec["width"], spec["height"])
     prepare_render_app(document.settings)
@@ -227,9 +227,9 @@ def read_scene(spec):
 
 
 def encoding_worker(spec, scene, duration):
-    from stavellum.encoding import probe_nvenc, video_arguments
-    from stavellum.export import _encode_attempt
-    from stavellum.render import FrameRenderer
+    from stavellum.exporting.encoding import probe_nvenc, video_arguments
+    from stavellum.exporting.export import _encode_attempt
+    from stavellum.rendering.render import FrameRenderer
 
     helper = helpers()
     available, reason = probe_nvenc(spec["ffmpeg"], scene.settings, lambda: False)
@@ -269,7 +269,7 @@ def encoding_worker(spec, scene, duration):
 def quality_worker(spec, scene):
     from PySide6.QtGui import QImage
 
-    from stavellum.render import FrameRenderer
+    from stavellum.rendering.render import FrameRenderer
 
     times = quality_times(spec["start"], spec["duration"])
     directory = Path(spec["result"]).parent
@@ -323,7 +323,7 @@ def quality_worker(spec, scene):
 
 
 def full_worker(spec):
-    from stavellum.export import export_video
+    from stavellum.exporting.export import export_video
 
     document = load_document_for_run(spec["project"], 2560, 1440)
     started = time.perf_counter()

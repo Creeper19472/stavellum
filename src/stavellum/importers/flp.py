@@ -16,9 +16,9 @@ from pyflp.arrangement import TrackEvent
 from pyflp.channel import LevelsEvent, ParametersEvent
 from pyflp.pattern import NotesEvent
 
-from stavellum.models import Diagnostic, NoteEvent, ProjectIR, TrackInfo
+from stavellum.domain.models import Diagnostic, NoteEvent, ProjectIR, TrackInfo
 
-from . import ImportFailure
+from .errors import ImportFailure
 from .flp_automation import (
     build_routes,
     decode_automation,

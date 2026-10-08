@@ -4,7 +4,7 @@ from random import Random
 
 import pytest
 
-from stavellum.ottava import OctaveNote, OctaveSpan, infer_ottavas
+from stavellum.engraving.ottava import OctaveNote, OctaveSpan, infer_ottavas
 
 
 def sequence(pitches, *, start=Fraction(0), step=Fraction(1), duration=None, prefix="n"):

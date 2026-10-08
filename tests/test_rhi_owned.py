@@ -14,18 +14,17 @@ import pytest
 from native_support import require_vulkan_device
 from PySide6.QtGui import QImage
 
-from stavellum import _rhi
-from stavellum.gpu import GpuBackendError
+from stavellum.rendering import _rhi
+from stavellum.rendering.gpu import GpuBackendError
 
 
 @pytest.fixture
 def resource_layout(tmp_path, monkeypatch):
-    module = tmp_path / "src/stavellum/_rhi.py"
-    module.parent.mkdir(parents=True)
-    module.touch()
-    monkeypatch.setattr(_rhi, "__file__", str(module))
+    package = tmp_path / "src/stavellum"
+    package.mkdir(parents=True)
+    monkeypatch.setattr(_rhi, "files", lambda name: package)
     monkeypatch.delenv("STAVELLUM_RHI_DLL", raising=False)
-    packaged = module.parent / "native/rhi/stavellum_rhi.dll"
+    packaged = package / "native/rhi/stavellum_rhi.dll"
     cached = tmp_path / ".cache/rhi/build/stavellum_rhi.dll"
     return packaged, cached
 
@@ -55,9 +54,9 @@ def test_development_native_library_is_used_without_packaged_resources(resource_
 OWNERSHIP_SCRIPT = r'''
 import gc, json, os, random, sys, threading
 from PySide6.QtGui import QColor, QImage
-from stavellum._rhi import Quad, RhiTarget
-from stavellum.models import RenderSettings
-from stavellum.qt import prepare_render_app
+from stavellum.rendering._rhi import Quad, RhiTarget
+from stavellum.domain.models import RenderSettings
+from stavellum.graphics.qt import prepare_render_app
 
 prepare_render_app(RenderSettings(render_backend="gpu"))
 api = sys.argv[1]
@@ -246,11 +245,11 @@ sys.path.insert(0, "tests")
 from test_export_pipeline import Process
 from native_support import require_vulkan_device
 from test_render import rendered_document
-from stavellum import export
-from stavellum.models import RenderSettings
-from stavellum.qt import prepare_render_app
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.exporting import export
+from stavellum.domain.models import RenderSettings
+from stavellum.graphics.qt import prepare_render_app
+from stavellum.rendering.render import FrameRenderer
+from stavellum.presentation.scene import compile_scene
 
 os.environ.pop("STAVELLUM_RHI_COPY_READBACK", None)
 os.environ.pop("STAVELLUM_RHI_RGBA_READBACK", None)
@@ -296,9 +295,9 @@ print(json.dumps({"api": api, "frames": count, "queue_peak": report["frame_queue
 ABI_FAILURE_SCRIPT = r'''
 import ctypes, json, os, sys
 from PySide6.QtGui import QColor
-from stavellum._rhi import Quad, RhiTarget, _OwnedFrame
-from stavellum.models import RenderSettings
-from stavellum.qt import prepare_render_app
+from stavellum.rendering._rhi import Quad, RhiTarget, _OwnedFrame
+from stavellum.domain.models import RenderSettings
+from stavellum.graphics.qt import prepare_render_app
 
 os.environ.pop("STAVELLUM_RHI_COPY_READBACK", None)
 os.environ.pop("STAVELLUM_RHI_RGBA_READBACK", None)

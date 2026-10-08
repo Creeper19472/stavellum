@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from .models import ProjectDocument, load_document, save_document
+from stavellum.domain.models import ProjectDocument, load_document, save_document
 
 
 def _add_inference_options(parser: argparse.ArgumentParser) -> None:
@@ -79,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command in (None, "gui"):
-            from .gui import run_gui
+            from stavellum.ui.gui import run_gui
             return run_gui(getattr(args, "project", None))
         if args.command == "demo":
             from .demo import create_demo_document
@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
             path = str(Path(args.output).resolve() / "demo.stproj")
             print(path)
             if args.open:
-                from .gui import run_gui
+                from stavellum.ui.gui import run_gui
                 return run_gui(path)
             return 0
         if args.command in ("inspect", "import"):
@@ -98,8 +98,8 @@ def main(argv: list[str] | None = None) -> int:
                 summary = {"name": project.name, "source_version": project.source_version, "notes": len(project.notes), "tracks": [asdict(t) for t in project.tracks], "bpm": project.bpm, "meter": f"{project.numerator}/{project.denominator}", "arrangements": project.arrangement_names, "timing_confirmed": project.timing_confirmed, "diagnostics": [asdict(d) for d in project.diagnostics]}
                 print(json.dumps(summary, ensure_ascii=False, indent=2))
                 return 0
-            from .mapping import suggest_mappings
-            from .models import Metadata
+            from stavellum.domain.mapping import suggest_mappings
+            from stavellum.domain.models import Metadata
             if args.bpm is not None:
                 project.bpm = args.bpm
             if args.confirm_fixed_timing:
@@ -114,9 +114,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command in ("frame", "render") and args.render_backend is not None:
             document.settings.render_backend = args.render_backend
         if args.command == "frame":
-            from .qt import prepare_render_app
-            from .render import FrameRenderer
-            from .scene import compile_scene
+            from stavellum.graphics.qt import prepare_render_app
+            from stavellum.presentation.scene import compile_scene
+            from stavellum.rendering.render import FrameRenderer
             document.validate()
             prepare_render_app(document.settings)
             path = Path(args.output).resolve()
@@ -129,8 +129,8 @@ def main(argv: list[str] | None = None) -> int:
                 renderer.close()
             print(path)
         elif args.command == "render":
-            from .export import export_video
-            from .qt import prepare_render_app
+            from stavellum.exporting.export import export_video
+            from stavellum.graphics.qt import prepare_render_app
             for attr in ("width", "height", "fps", "preset", "video_encoder", "nvenc_cq", "nvenc_preset"):
                 if getattr(args, attr) is not None:
                     setattr(document.settings, attr, getattr(args, attr))
@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
             prepare_render_app(document.settings)
             print(export_video(document, args.output, _progress))
         elif args.command == "parts":
-            from .notation import export_parts
+            from stavellum.engraving.notation import export_parts
             for path in export_parts(document, args.output, _progress):
                 print(path)
         return 0

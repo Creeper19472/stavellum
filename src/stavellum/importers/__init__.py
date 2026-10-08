@@ -2,15 +2,9 @@
 
 from pathlib import Path
 
-from stavellum.models import Diagnostic, ProjectIR
+from stavellum.domain.models import ProjectIR
 
-
-class ImportFailure(ValueError):
-    """The input cannot be represented safely; diagnostics accompany the failure."""
-
-    def __init__(self, message: str, diagnostics: list[Diagnostic] | None = None):
-        super().__init__(message)
-        self.diagnostics = diagnostics or [Diagnostic("error", "import_failed", message)]
+from .errors import ImportFailure
 
 
 def import_project(path: str | Path, arrangement_index: int = 0) -> ProjectIR:

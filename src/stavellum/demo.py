@@ -9,8 +9,15 @@ from pathlib import Path
 import mido
 import numpy as np
 
-from .mapping import suggest_mappings
-from .models import Metadata, NoteEvent, ProjectDocument, ProjectIR, TrackInfo, save_document
+from stavellum.domain.mapping import suggest_mappings
+from stavellum.domain.models import (
+    Metadata,
+    NoteEvent,
+    ProjectDocument,
+    ProjectIR,
+    TrackInfo,
+    save_document,
+)
 
 
 def create_demo_document(output_dir: str | Path | None = None, bars: int = 16, tail_seconds: float = 1.25) -> ProjectDocument:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib
 import json
 import math
 import platform
@@ -17,13 +16,10 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
-from _baseline import load_package
+from _baseline import load_package, module
 from PySide6.QtGui import QImage
 
-from stavellum._core import library_path
-from stavellum._rhi import library_path as renderer_library_path
-from stavellum.export import _encode_attempt
-from stavellum.models import (
+from stavellum.domain.models import (
     Metadata,
     NoteEvent,
     PartMapping,
@@ -32,9 +28,12 @@ from stavellum.models import (
     RenderSettings,
     TrackInfo,
 )
-from stavellum.qt import ensure_app
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.exporting.export import _encode_attempt
+from stavellum.graphics.qt import ensure_app
+from stavellum.presentation._core import library_path
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering._rhi import library_path as renderer_library_path
+from stavellum.rendering.render import FrameRenderer
 
 
 def document(dense, width, height):
@@ -98,9 +97,10 @@ def main():
     directory = args.output.resolve()
     directory.mkdir(parents=True, exist_ok=True)
     package, commit = load_package(args.baseline_ref, directory / "baseline", current_native=True)
-    old_scene = importlib.import_module(package.__name__ + ".scene")
-    old_models = importlib.import_module(package.__name__ + ".models")
-    old_render = importlib.import_module(package.__name__ + ".render")
+    old_scene = module(package, "scene")
+    old_models = module(package, "models")
+    old_render = module(package, "render")
+    old_raster = module(package, "raster")
     ensure_app()
     audio = directory / "silence.wav"
     with wave.open(str(audio), "wb") as output:
@@ -136,7 +136,7 @@ def main():
                 evaluation_times = [rng.uniform(0, scenes["current"].score_duration + 2)
                                     for _ in range(args.evaluation_frames)]
                 values = {"baseline": [], "current": []}
-                with old_render.RasterFrameRenderer(scenes["baseline"]) as old_assets, \
+                with old_raster.RasterFrameRenderer(scenes["baseline"]) as old_assets, \
                         FrameRenderer(scenes["current"]) as current_assets:
                     def baseline(t):
                         scene = scenes["baseline"]

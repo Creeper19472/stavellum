@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import io
+import re
 import subprocess
 import sys
 import zipfile
@@ -23,6 +24,8 @@ def load_package(ref, directory, *, current_native=False):
                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
     directory = directory.resolve()
     directory.mkdir(parents=True, exist_ok=True)
+    # A distinct namespace per output keeps simultaneous revisions apart.
+    name = "stavellum._benchmark_baseline_" + commit[:12] + "_" + str(abs(hash(str(directory))))
     with zipfile.ZipFile(io.BytesIO(archive)) as source:
         roots = [Path(name).parent for name in source.namelist()
                  if len(Path(name).parts) == 3 and name.endswith("/__init__.py")]
@@ -43,22 +46,42 @@ def load_package(ref, directory, *, current_native=False):
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 data = source.read(item)
                 if item_path.suffix == ".py":
-                    # Adapt historical package imports and diagnostic variables after a rename.
-                    data = (data.decode("utf-8").replace(package_root.name, "stavellum")
-                            .replace(package_root.name.upper(), "STAVELLUM").encode("utf-8"))
+                    # Isolate absolute imports and resource anchors as well as relative imports.
+                    # DLL filenames and diagnostic environment variables retain their names.
+                    text = data.decode("utf-8")
+                    text = re.sub(r"\b(from|import) " + re.escape(package_root.name) + r"(?=[.\s])",
+                                  lambda match: match[1] + " " + name, text)
+                    text = re.sub(r"(['\"])" + re.escape(package_root.name) + r"\1",
+                                  lambda match: match[1] + name + match[1], text)
+                    data = text.replace(package_root.name.upper(), "STAVELLUM").encode("utf-8")
                 destination.write_bytes(data)
-    # A distinct namespace per output keeps simultaneous historical revisions apart.
-    name = "stavellum._benchmark_baseline_" + commit[:12] + "_" + str(abs(hash(str(directory))))
     spec = importlib.util.spec_from_file_location(name, directory / "__init__.py",
                                                 submodule_search_locations=[str(directory)])
     package = importlib.util.module_from_spec(spec)
     sys.modules[name] = package
     spec.loader.exec_module(package)
     if current_native:
-        sys.modules[f"{name}._rhi"] = importlib.import_module("stavellum._rhi")
+        native_name = "rendering._rhi" if (directory / "rendering/_rhi.py").is_file() else "_rhi"
+        if "." in native_name:
+            importlib.import_module(f"{name}.rendering")
+        sys.modules[f"{name}.{native_name}"] = importlib.import_module("stavellum.rendering._rhi")
     return package, commit
 
 
+def module(package, name):
+    """Resolve logical modules from an archive's own layout, without masking import errors."""
+    moved = {
+        "scene": "presentation.scene", "layout": "presentation.layout",
+        "models": "domain.models", "render": "rendering.render",
+        "raster": "rendering.raster", "rhi": "rendering.rhi",
+    }
+    directory = Path(package.__file__).parent
+    candidate = moved.get(name, name)
+    if not directory.joinpath(*candidate.split(".")).with_suffix(".py").is_file():
+        candidate = "render" if name == "raster" else name
+    return importlib.import_module(f"{package.__name__}.{candidate}")
+
+
 def renderer(package, *, rhi=False):
-    module = importlib.import_module(f"{package.__name__}.{'rhi' if rhi else 'render'}")
-    return module.RhiFrameRenderer if rhi else module.FrameRenderer
+    implementation = module(package, "rhi" if rhi else "render")
+    return implementation.RhiFrameRenderer if rhi else implementation.FrameRenderer

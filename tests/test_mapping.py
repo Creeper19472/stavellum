@@ -1,12 +1,12 @@
 import pytest
 
-from stavellum.mapping import (
+from stavellum.domain.mapping import (
     activity_color,
     identify_instrument,
     split_track_by_midi_channel,
     suggest_mappings,
 )
-from stavellum.models import (
+from stavellum.domain.models import (
     AutomationPoint,
     NoteEvent,
     PartMapping,

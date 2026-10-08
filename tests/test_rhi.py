@@ -14,9 +14,9 @@ from native_support import require_vulkan_device
 from PySide6.QtGui import QColor, QImage
 from test_render import colored_activity_document, rendered_document
 
-from stavellum._rhi import RhiTarget, library_path
-from stavellum.rhi import RhiFrameRenderer, clipped_quad
-from stavellum.scene import compile_scene
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering._rhi import RhiTarget, library_path
+from stavellum.rendering.rhi import RhiFrameRenderer, clipped_quad
 
 
 def test_fractional_clipping_adjusts_uv_without_rounding_or_bleed_loss():
@@ -68,7 +68,7 @@ def rhi_scene():
 
 @pytest.fixture
 def fake_native(monkeypatch):
-    monkeypatch.setattr("stavellum.rhi.RhiTarget", FakeTarget)
+    monkeypatch.setattr("stavellum.rendering.rhi.RhiTarget", FakeTarget)
 
 
 def test_assets_are_reused_without_mutating_scene_or_rasterizing_output(rhi_scene, fake_native, monkeypatch):
@@ -218,12 +218,12 @@ from native_frames import frame_layout
 from dataclasses import replace
 sys.path.insert(0, "tests")
 from test_render import colored_activity_document, lamp_interior, lamp_rectangle, rendered_document
-from stavellum.models import RenderSettings
-from stavellum.qt import prepare_render_app
-from stavellum._rhi import RhiTarget, Quad
-from stavellum.rhi import RhiFrameRenderer
-from stavellum.render import FrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.domain.models import RenderSettings
+from stavellum.graphics.qt import prepare_render_app
+from stavellum.rendering._rhi import RhiTarget, Quad
+from stavellum.rendering.rhi import RhiFrameRenderer
+from stavellum.rendering.render import FrameRenderer
+from stavellum.presentation.scene import compile_scene
 from PySide6.QtGui import QImage, QColor
 prepare_render_app(RenderSettings(render_backend="gpu"))
 os.environ.pop("STAVELLUM_RHI_COPY_READBACK", None)

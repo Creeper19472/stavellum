@@ -9,7 +9,7 @@ from PySide6.QtCore import QSettings, Qt
 from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QApplication
 
-from stavellum.welcome import RecentProjects, WelcomePage, _MusicBanner
+from stavellum.ui.welcome import RecentProjects, WelcomePage, _MusicBanner
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 

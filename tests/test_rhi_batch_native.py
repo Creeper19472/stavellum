@@ -10,15 +10,15 @@ from pathlib import Path
 import pytest
 from native_support import require_vulkan_device
 
-from stavellum._rhi import library_path
+from stavellum.rendering._rhi import library_path
 
 NATIVE_BATCH_SCRIPT = r'''
 import ctypes, json, os, threading
 from pathlib import Path
 import PySide6
-from stavellum._rhi import Quad, _OwnedFrame, library_path
-from stavellum.models import RenderSettings
-from stavellum.qt import prepare_render_app
+from stavellum.rendering._rhi import Quad, _OwnedFrame, library_path
+from stavellum.domain.models import RenderSettings
+from stavellum.graphics.qt import prepare_render_app
 
 prepare_render_app(RenderSettings(render_backend="gpu"))
 directory = os.add_dll_directory(str(Path(PySide6.__file__).parent))

@@ -7,8 +7,8 @@ import pickle
 
 import pytest
 
-from stavellum.axis import TimeAxis
-from stavellum.camera import CameraTimeline, compile_camera
+from stavellum.presentation.axis import TimeAxis
+from stavellum.presentation.camera import CameraTimeline, compile_camera
 
 
 def test_linear_motion_is_unchanged_including_silent_leadin_and_tail():

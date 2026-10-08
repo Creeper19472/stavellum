@@ -14,8 +14,7 @@ from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer, Signal
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from stavellum import gui
-from stavellum.models import (
+from stavellum.domain.models import (
     Metadata,
     NoteEvent,
     PartMapping,
@@ -25,6 +24,7 @@ from stavellum.models import (
     load_document,
     save_document,
 )
+from stavellum.ui import gui
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -158,7 +158,7 @@ def install_existing(window, source, app, *, dirty=True):
 
 
 def options(source, audio="", processing=None):
-    from stavellum.new_project import NewProjectOptions
+    from stavellum.ui.new_project import NewProjectOptions
 
     return NewProjectOptions(str(source), str(audio), dict(PROCESSING if processing is None else processing))
 
@@ -717,7 +717,7 @@ def test_real_midi_worker_imports_wizard_choices_before_preview(
 ):
     import mido
 
-    from stavellum.background import BackgroundJob
+    from stavellum.ui.background import BackgroundJob
 
     source = tmp_path / "真实来源.mid"
     midi = mido.MidiFile()

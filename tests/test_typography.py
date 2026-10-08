@@ -10,18 +10,10 @@ from pypdf import PdfReader
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QFont, QFontDatabase, QImage, QPainter
 
-from stavellum.notation import _write_pdf
-from stavellum.qt import ensure_app
-from stavellum.typography import (
-    CJK_FAMILY,
-    LATIN_FAMILY,
-    _font_ids,
-    _layout,
-    draw_text,
-    draw_text_rect,
-    register_fonts,
-    text_height,
-)
+from stavellum.engraving.notation import _write_pdf
+from stavellum.graphics.font_registry import CJK_FAMILY, LATIN_FAMILY, _font_ids, register_fonts
+from stavellum.graphics.qt import ensure_app
+from stavellum.graphics.typography import _layout, draw_text, draw_text_rect, text_height
 
 
 @pytest.mark.parametrize(("text", "family", "style", "italic"), [
@@ -53,7 +45,7 @@ def test_font_resources_are_registered_once_without_recursive_app_creation(monke
     def forbidden():
         raise AssertionError("register_fonts must not call ensure_app")
 
-    monkeypatch.setattr("stavellum.qt.ensure_app", forbidden)
+    monkeypatch.setattr("stavellum.graphics.qt.ensure_app", forbidden)
     register_fonts()
     assert _font_ids == ids
     directory = files("stavellum").joinpath("fonts")

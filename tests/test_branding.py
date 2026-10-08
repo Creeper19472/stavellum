@@ -7,8 +7,8 @@ from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QColor, QImage, QPalette
 from PySide6.QtWidgets import QWidget
 
-from stavellum import branding
-from stavellum.qt import ensure_app
+from stavellum.graphics import branding
+from stavellum.graphics.qt import ensure_app
 
 
 def test_logo_variants_and_unreadable_dark_fallback(tmp_path, monkeypatch):
@@ -70,7 +70,7 @@ def test_window_and_application_icons_update_on_theme_and_palette_signals(monkey
 
 
 def test_welcome_banner_uses_light_logo_even_in_dark_environment(monkeypatch):
-    from stavellum.welcome import _MusicBanner
+    from stavellum.ui.welcome import _MusicBanner
 
     ensure_app()
     monkeypatch.setattr(branding, "_dark_environment", lambda: True)

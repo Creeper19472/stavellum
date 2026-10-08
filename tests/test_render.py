@@ -14,7 +14,7 @@ from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtSvg import QSvgRenderer
 from test_scene import crosspart_document, owned_elements, score_document
 
-from stavellum.models import (
+from stavellum.domain.models import (
     Metadata,
     NoteEvent,
     PartMapping,
@@ -23,9 +23,10 @@ from stavellum.models import (
     RenderSettings,
     TrackInfo,
 )
-from stavellum.qt import ensure_app
-from stavellum.render import FrameRenderer, logo_opacity
-from stavellum.scene import compile_scene
+from stavellum.graphics.qt import ensure_app
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.render import FrameRenderer
+from stavellum.rendering.shared import logo_opacity
 
 pytestmark = pytest.mark.integration
 
@@ -105,7 +106,7 @@ def test_logo_zero_hold_and_zero_opacity():
 
 @pytest.mark.parametrize("width,height", [(320, 240), (1920, 1080), (3840, 2160), (480, 800)])
 def test_logo_geometry_preserves_source_aspect_and_frame_margins(scene, width, height):
-    from stavellum.branding import logo_image
+    from stavellum.graphics.branding import logo_image
 
     settings = replace(scene.settings, width=width, height=height,
                        logo_enabled=True, logo_size_ratio=0.25)
@@ -122,7 +123,7 @@ def test_logo_geometry_preserves_source_aspect_and_frame_margins(scene, width, h
 
 
 def test_logo_pixels_are_seekable_cached_and_absent_when_disabled(scene, monkeypatch):
-    from stavellum import render
+    from stavellum.rendering import raster as render
 
     calls = []
     load_image = render.logo_image
@@ -664,7 +665,7 @@ def test_hidden_announcement_reclaims_space_during_intro_and_random_seeks_match(
 
 @pytest.mark.parametrize("bpm", [120, 112.5])
 def test_tempo_appears_at_first_beat_then_scrolls_out_without_timed_fades(bpm, monkeypatch):
-    import stavellum.render as render_module
+    import stavellum.rendering.raster as render_module
 
     document = score_document()
     document.project.bpm = bpm

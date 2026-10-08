@@ -9,9 +9,9 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from stavellum import new_project
-from stavellum.audio import AUDIO_FILE_FILTER
-from stavellum.new_project import NewProjectOptions, ProjectWizard
+from stavellum.exporting.audio import AUDIO_FILE_FILTER
+from stavellum.ui import new_project
+from stavellum.ui.new_project import NewProjectOptions, ProjectWizard
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 

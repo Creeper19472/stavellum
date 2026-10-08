@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 from PySide6.QtGui import QImage
 
-from stavellum import _rhi, render
+from stavellum.rendering import _rhi, render
 
 path = Path(__file__).resolve().parents[1] / "scripts/profile_rhi.py"
 spec = importlib.util.spec_from_file_location("rhi_profile", path)
@@ -37,17 +37,29 @@ def test_native_library_restores_environment_even_after_failure(monkeypatch, pre
 
 
 @pytest.mark.parametrize("archive_name", ["stavellum", "historical_package"])
-def test_baseline_isolates_historical_assets_and_optional_native_module(tmp_path, monkeypatch, archive_name):
+@pytest.mark.parametrize("layout", ["flat", "subpackages"])
+def test_baseline_isolates_historical_assets_and_optional_native_module(tmp_path, monkeypatch, archive_name, layout):
+    prefix_path = "rendering/" if layout == "subpackages" else ""
+    namespace_path = "rendering." if layout == "subpackages" else ""
     sources = {
         "__init__": b"",
-        "render": b"class FrameRenderer:\n    pass\n",
-        "_rhi": b"class RhiTarget:\n    pass\n",
-        "rhi": b"from ._rhi import RhiTarget\nfrom .render import FrameRenderer\nclass RhiFrameRenderer:\n    pass\n",
+        prefix_path + "render": b"class FrameRenderer:\n    pass\n",
+        prefix_path + "_rhi": b"class RhiTarget:\n    pass\n",
+        prefix_path + "rhi": (
+            f"from {archive_name}.{namespace_path}_rhi import RhiTarget\n"
+            f"from {archive_name}.{namespace_path}render import FrameRenderer\n"
+            "from importlib.resources import files\n"
+            f"RESOURCE = files('{archive_name}').joinpath('baseline-marker.txt').read_text()\n"
+            "class RhiFrameRenderer:\n    pass\n"
+        ).encode(),
     }
+    if prefix_path:
+        sources[prefix_path + "__init__"] = b""
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w") as output:
         output.writestr("src/", b"")
         output.writestr(f"src/{archive_name}/", b"")
+        output.writestr(f"src/{archive_name}/baseline-marker.txt", b"historical resources")
         for name, source in sources.items():
             output.writestr(f"src/{archive_name}/{name}.py", source)
 
@@ -65,7 +77,8 @@ def test_baseline_isolates_historical_assets_and_optional_native_module(tmp_path
         namespace = sys.modules[old.__module__]
         assert namespace.RhiTarget is not _rhi.RhiTarget
         assert namespace.FrameRenderer is not render.FrameRenderer
-        assert sys.modules["stavellum._rhi"] is _rhi
+        assert namespace.RESOURCE == "historical resources"
+        assert sys.modules["stavellum.rendering._rhi"] is _rhi
         assert commit == "a" * 40
         ablation, _ = profile.baseline_renderer("old", tmp_path / "ablation", current_native=True)
         assert sys.modules[ablation.__module__].RhiTarget is _rhi.RhiTarget

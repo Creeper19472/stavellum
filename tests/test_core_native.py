@@ -11,9 +11,9 @@ from pathlib import Path
 import pytest
 from frame_reference import _tile_plan, activity_levels, layout_at
 
-from stavellum._core import CoreTarget
-from stavellum.render import RasterFrameRenderer
-from stavellum.scene import compile_scene
+from stavellum.presentation._core import CoreTarget
+from stavellum.presentation.scene import compile_scene
+from stavellum.rendering.raster import RasterFrameRenderer
 
 sys.path.insert(0, "tests")
 from test_render import colored_activity_document, rendered_document  # noqa: E402
@@ -120,7 +120,7 @@ def test_rust_core_matches_python_on_multi_part_expansion_and_hidden_rows():
 def test_rust_core_rejects_short_axis_without_crashing():
     script = r'''
 import ctypes, json
-from stavellum._core import CurveKey, Note, LayoutConsts, library_path
+from stavellum.presentation._core import CurveKey, Note, LayoutConsts, library_path
 dll = ctypes.CDLL(str(library_path()))
 pointer = ctypes.c_void_p
 dll.spcore_compile.restype = pointer
@@ -161,7 +161,7 @@ print(json.dumps({"handle": bool(handle), "error": error}))
 def test_rust_core_rejects_inconsistent_declared_totals():
     script = r'''
 import ctypes, json
-from stavellum._core import CurveKey, Note, LayoutConsts, library_path
+from stavellum.presentation._core import CurveKey, Note, LayoutConsts, library_path
 dll = ctypes.CDLL(str(library_path()))
 pointer = ctypes.c_void_p
 dll.spcore_compile.restype = pointer

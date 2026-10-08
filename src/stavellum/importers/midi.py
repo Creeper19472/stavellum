@@ -5,9 +5,9 @@ from pathlib import Path
 
 import mido
 
-from stavellum.models import Diagnostic, NoteEvent, ProjectIR, TrackInfo
+from stavellum.domain.models import Diagnostic, NoteEvent, ProjectIR, TrackInfo
 
-from . import ImportFailure
+from .errors import ImportFailure
 
 # Unambiguous GM patches are hints; user confirmation still controls icons.
 GM_NAMES = {

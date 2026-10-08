@@ -13,9 +13,7 @@ import pytest
 from PySide6.QtCore import QEventLoop, QTimer, QUrl
 from PySide6.QtMultimedia import QMediaPlayer
 
-from stavellum.audio import audio_duration
-from stavellum.export import export_video
-from stavellum.models import (
+from stavellum.domain.models import (
     Metadata,
     NoteEvent,
     PartMapping,
@@ -24,7 +22,9 @@ from stavellum.models import (
     RenderSettings,
     TrackInfo,
 )
-from stavellum.qt import ensure_app
+from stavellum.exporting.audio import audio_duration
+from stavellum.exporting.export import export_video
+from stavellum.graphics.qt import ensure_app
 
 pytestmark = [
     pytest.mark.integration,

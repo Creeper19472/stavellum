@@ -9,8 +9,8 @@ from collections import OrderedDict
 
 import pytest
 
-from stavellum._rhi import Quad, RhiTarget, _OwnedFrame
-from stavellum.gpu import GpuBackendError
+from stavellum.rendering._rhi import Quad, RhiTarget, _OwnedFrame
+from stavellum.rendering.gpu import GpuBackendError
 
 
 class NativeBatch:

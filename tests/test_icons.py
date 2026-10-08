@@ -4,9 +4,9 @@ import pytest
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QImage, QPainter
 
-from stavellum import icons
-from stavellum.icons import icon_renderer
-from stavellum.qt import ensure_app
+from stavellum.graphics import icons
+from stavellum.graphics.icons import icon_renderer
+from stavellum.graphics.qt import ensure_app
 
 
 @pytest.fixture(autouse=True)

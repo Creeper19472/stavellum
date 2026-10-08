@@ -9,7 +9,7 @@ import math
 import struct
 from dataclasses import dataclass, field
 
-from stavellum.models import AutomationPoint, Diagnostic, VolumeAutomation, VolumeRoute
+from stavellum.domain.models import AutomationPoint, Diagnostic, VolumeAutomation, VolumeRoute
 
 
 @dataclass(slots=True)

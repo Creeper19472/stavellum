@@ -11,7 +11,7 @@ import pytest
 def vulkan_device_available() -> bool:
     """Probe once per session whether the native DLL can open a device."""
     try:
-        from stavellum._rhi import RhiTarget
+        from stavellum.rendering._rhi import RhiTarget
 
         target = RhiTarget(4, 4, 0, "vulkan")
         target.close()
