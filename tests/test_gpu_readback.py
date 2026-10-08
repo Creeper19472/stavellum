@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from native_support import require_vulkan_device
 
 from stavellum._rhi import library_path
 
@@ -129,6 +130,7 @@ def test_real_default_vulkan_preview_stream_ownership_cancellation_and_recovery(
     dll = library_path()
     if not dll.exists():
         pytest.skip("Native Vulkan renderer DLL has not been built")
+    require_vulkan_device()
     result = subprocess.run(
         [sys.executable, "-c", GPU_READBACK_SCRIPT], capture_output=True, text=True,
         encoding="utf-8", errors="replace", timeout=90, cwd=root,

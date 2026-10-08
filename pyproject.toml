@@ -40,8 +40,8 @@ packages = ["src/stavellum"]
 path = "hatch_build.py"
 
 [tool.hatch.build.targets.sdist]
-include = ["src/stavellum", "native/rhi", "scripts/build_rhi.py", "hatch_build.py", "pyproject.toml", "uv.lock", "README.md", "LICENSE", "LICENSES", "THIRD_PARTY_NOTICES.md", "run.ps1", "tests", "docs", "scripts"]
-artifacts = ["src/stavellum/native/rhi/stavellum_rhi.dll", "src/stavellum/native/rhi/quad.vert.qsb", "src/stavellum/native/rhi/quad.frag.qsb"]
+include = ["src/stavellum", "native/rhi", "native/rust-renderer", "native/rust-core", ".cargo/config.toml", "Cargo.toml", "Cargo.lock", "hatch_build.py", "pyproject.toml", "uv.lock", "README.md", "README-zh.md", "LICENSE", "LICENSES", "THIRD_PARTY_NOTICES.md", "run.ps1", "tests", "docs", "scripts"]
+artifacts = ["src/stavellum/native/rhi/stavellum_rust.dll", "src/stavellum/native/rhi/stavellum_rhi.dll", "src/stavellum/native/rhi/quad.vert.qsb", "src/stavellum/native/rhi/quad.frag.qsb", "src/stavellum/native/core/stavellum_core.dll"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,8 @@
+# Toolchain defaults for the Windows GNU target. The MinGW linker is
+# discovered per invocation by scripts/build_rust.py, which exports
+# CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER; a machine-specific linker may
+# also be pinned in .cargo/config.local.toml (gitignored). A plain
+# `cargo build` works when a MinGW gcc.exe is already on PATH. libgcc is
+# linked statically so the cdylib depends only on system libraries.
+[target.x86_64-pc-windows-gnu]
+rustflags = ["-C", "link-arg=-static-libgcc"]

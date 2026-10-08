@@ -15,14 +15,14 @@
 
 为使本程序在性能上取得最佳表现，设备应至少具备**支持 Vulkan 与 4×MSAA 的显卡及其驱动**。
 
-目前为止，程序仅支持在 Windows x64 上运行，需要 Python **3.14**、[uv](https://docs.astral.sh/uv/) 和提供 `libx264` 编码器的 FFmpeg。源码运行时还需要 Visual Studio 的 C++ 开发工具，以构建原生 RHI 后端；Qt 开发 SDK 可由构建脚本下载到本项目缓存。PySide6 固定为 **6.11.2**，与原生后端使用的 Qt 私有 ABI 保持一致。
+目前为止，程序仅支持在 Windows x64 上运行，需要 Python **3.14**、[uv](https://docs.astral.sh/uv/) 和提供 `libx264` 编码器的 FFmpeg。源码运行还需要 Cargo，以及 Visual Studio C++ 开发工具或 windows-gnu Rust 工具链，以构建原生 Rust Vulkan 后端（见 [Rust 构建说明](docs/rust-renderer.md)）。可选的传统 Qt RHI 后端另外需要 Visual Studio C++ 开发工具，并要求 PySide6 **6.11.2** 与其 Qt 私有 ABI 保持一致。
 
 将 `ffmpeg.exe`、`ffprobe.exe` 所在目录加入 `PATH`，然后在项目目录运行：
 
 ```powershell
 uv python install 3.14
 uv sync --extra dev --locked
-uv run --with py7zr python scripts/build_rhi.py --prepare --install
+uv run python scripts/build_rust.py --install
 ffmpeg -version
 ffprobe -version
 .\run.ps1
@@ -156,8 +156,10 @@ uv run stavellum parts "song.stproj" --output artifacts/parts
 
 ## 开发与依赖
 
+Rust Vulkan 合成器保持原生渲染 ABI 兼容，传统 Qt 后端仍可显式选择。Rust 场景计算库包含 Python 绑定和对照测试，目前尚未接入实际渲染流程。构建、后端选择与基准方法见 [原生渲染说明](docs/rust-renderer.md)。
+
 ```powershell
-uv run python scripts/build_rhi.py --install
+uv run python scripts/build_rust.py --install
 uv run pytest -q
 uv run ruff check src tests scripts
 uv build --wheel
