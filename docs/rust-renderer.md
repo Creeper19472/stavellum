@@ -32,6 +32,37 @@ is selected; development Cargo outputs are never selected implicitly.
 
 ## Architecture
 
+### Native module boundaries
+
+Both crates keep their public Rust names re-exported from `lib.rs`; the C
+entry points, struct layouts, DLL names and ABI versions remain unchanged.
+The implementation modules are private, and the crates have no dependency
+on each other.
+
+In `rust-core`, `abi.rs` defines the C records, while `ffi.rs` owns pointer
+validation, scene handles and thread-local errors. Pure evaluation flows
+from `scene.rs` through `camera.rs`, `track.rs`, `axis.rs` and `math.rs`;
+those modules do not depend on FFI. Camera, part and scene construction uses
+crate-internal methods, keeping their state private. Activity envelopes and
+tile-plan evaluation stay with the scene.
+
+In `rust-renderer`, `abi.rs` defines the C records and shared batch limits,
+and `ffi.rs` owns handles, thread checks, pointer conversion and errors.
+`renderer.rs` remains the single owner of renderer state and its explicit
+resource cleanup. Its child modules implement device and host-buffer
+management (`device`), initialization (`init`), texture staging and descriptor
+reuse (`textures`), command packing and submission (`submit`), CPU frame
+pooling and pixel conversion (`readback`), and JSON reporting (`report`).
+Child modules can access the renderer's private state; the FFI boundary uses
+only crate-internal methods. Device, instance and loader declaration order,
+and the explicit Vulkan destruction order, are preserved.
+
+Unit tests live with their implementation modules. ABI tests check sizes,
+alignment and field offsets against the Windows x64 ctypes contract; Python
+integration tests exercise the installed DLLs after rebuilding both crates.
+
+### Rendering behavior
+
 - **Instanced quads**: one 48-byte instance per quad. The six corner vertices
   are expanded in the vertex shader from `gl_VertexIndex`, replacing the old
   6 × 32 CPU-expanded vertices per quad (75% less upload, no CPU transform).
