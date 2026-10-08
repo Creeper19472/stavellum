@@ -9,6 +9,10 @@ build/
 dist/
 artifacts/
 .coverage
+target/
+src/stavellum/native/rhi/stavellum_rust.dll
 src/stavellum/native/rhi/stavellum_rhi.dll
 src/stavellum/native/rhi/quad.vert.qsb
 src/stavellum/native/rhi/quad.frag.qsb
+src/stavellum/native/core/stavellum_core.dll
+.cargo/config.local.toml

@@ -15,14 +15,14 @@ The program renders frame by frame instead of capturing the screen. The default 
 
 For the best performance, your device should have at least **a graphics card and driver supporting Vulkan and 4×MSAA**.
 
-The program currently runs only on Windows x64 and requires Python **3.14**, [uv](https://docs.astral.sh/uv/), and FFmpeg with the `libx264` encoder. Running from source also requires the Visual Studio C++ development tools to build the native RHI backend; the build script can download the Qt development SDK into the project cache. PySide6 is pinned to **6.11.2** to match the Qt private ABI used by the native backend.
+The program currently runs only on Windows x64 and requires Python **3.14**, [uv](https://docs.astral.sh/uv/), and FFmpeg with the `libx264` encoder. Running from source also builds the native Rust Vulkan backend with Cargo (Visual Studio C++ tools or a windows-gnu Rust toolchain; see [Rust build instructions](docs/rust-renderer.md)). The optional legacy Qt RHI backend additionally needs the Visual Studio C++ tools and PySide6 pinned to **6.11.2**.
 
 Add the directory containing `ffmpeg.exe` and `ffprobe.exe` to `PATH`, then run the following in the project directory:
 
 ```powershell
 uv python install 3.14
 uv sync --extra dev --locked
-uv run --with py7zr python scripts/build_rhi.py --prepare --install
+uv run python scripts/build_rust.py --install
 ffmpeg -version
 ffprobe -version
 .\run.ps1
@@ -156,8 +156,10 @@ For more information, see [FLP / MIDI Import Guide](docs/importing.md).
 
 ## Development and Dependencies
 
+The Rust Vulkan compositor retains the native rendering ABI; the legacy Qt backend remains selectable. The Rust scene evaluation library includes Python bindings and parity tests, but is not yet called by the production rendering pipeline. See [Native build, backend selection and benchmarks](docs/rust-renderer.md).
+
 ```powershell
-uv run python scripts/build_rhi.py --install
+uv run python scripts/build_rust.py --install
 uv run pytest -q
 uv run ruff check src tests scripts
 uv build --wheel
