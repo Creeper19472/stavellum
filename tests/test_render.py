@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+import pickle
 import re
+import subprocess
+import sys
 import xml.etree.ElementTree as ET
 from dataclasses import replace
 
@@ -24,6 +29,7 @@ from stavellum.domain.models import (
     TrackInfo,
 )
 from stavellum.graphics.qt import ensure_app
+from stavellum.graphics.svg import svg_bytes
 from stavellum.presentation.scene import compile_scene
 from stavellum.rendering.render import FrameRenderer
 from stavellum.rendering.shared import logo_opacity
@@ -78,6 +84,68 @@ def scene():
 def pixels(frame: QImage) -> bytes:
     assert frame.format() == QImage.Format.Format_RGBA8888
     return bytes(frame.constBits())
+
+
+def test_preview_process_preserves_noteheads_without_importing_compiler(scene, tmp_path):
+    root = ET.fromstring(scene.svg)
+    head_ids = []
+    for element in root.iter():
+        if "notehead" in element.get("class", "").split():
+            identifier = f"preview_notehead_{len(head_ids)}"
+            element.set("id", identifier)
+            head_ids.append(identifier)
+    assert head_ids
+    preview_scene = replace(scene, svg=svg_bytes(root).decode("utf-8"))
+    payload = tmp_path / "compiled-scene.pickle"
+    payload.write_bytes(pickle.dumps((preview_scene, head_ids)))
+    with FrameRenderer(preview_scene) as reference:
+        expected = hashlib.sha256(pixels(reference.render_frame(.5))).hexdigest()
+
+    # The GUI receives normal Python data from a spawned compilation worker.
+    # A fresh interpreter must not inherit the compiler's XML namespace registry.
+    script = '''
+import hashlib
+import json
+import pickle
+import sys
+from pathlib import Path
+from PySide6.QtCore import QRectF, Qt, qInstallMessageHandler
+from PySide6.QtGui import QImage, QPainter
+from stavellum.rendering.render import FrameRenderer
+
+assert "stavellum.presentation.scene" not in sys.modules
+assert "stavellum.engraving.notation" not in sys.modules
+scene, head_ids = pickle.loads(Path(sys.argv[1]).read_bytes())
+warnings = []
+def message_handler(kind, context, message):
+    if context.category == "qt.svg":
+        warnings.append(message)
+previous_handler = qInstallMessageHandler(message_handler)
+try:
+    with FrameRenderer(scene) as renderer:
+        for svg in (renderer.header_renderer, renderer.body_renderer):
+            for identifier in head_ids:
+                assert svg.elementExists(identifier), identifier
+                assert not svg.boundsOnElement(identifier).isEmpty(), identifier
+            image = QImage(64, 64, QImage.Format.Format_RGBA8888)
+            image.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(image)
+            try:
+                svg.render(painter, head_ids[0], QRectF(0, 0, 64, 64))
+            finally:
+                painter.end()
+            assert max(bytes(image.constBits())[3::4]) > 0
+        frame = renderer.render_frame(.5)
+        digest = hashlib.sha256(bytes(frame.constBits())).hexdigest()
+finally:
+    qInstallMessageHandler(previous_handler)
+assert not warnings, warnings
+print(json.dumps({"frame": digest}))
+'''
+    result = subprocess.run([sys.executable, "-c", script, str(payload)],
+                            capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["frame"] == expected
 
 
 @pytest.mark.parametrize("mode,times,expected", [

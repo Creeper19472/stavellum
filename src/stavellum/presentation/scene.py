@@ -17,7 +17,7 @@ from stavellum.domain.mapping import activity_color
 from stavellum.domain.models import Diagnostic, ProjectDocument
 from stavellum.graphics.icons import resolve_icon
 from stavellum.graphics.qt import ensure_app
-from stavellum.graphics.svg import normalize_svg
+from stavellum.graphics.svg import normalize_svg, svg_bytes
 from stavellum.graphics.typography import _layout
 
 from .axis import TimeAxis
@@ -189,7 +189,7 @@ def _engrave_geometry(document: ProjectDocument) -> EngravedGeometry:
     svg = normalize_svg(notation.display_svg)
     root = ET.fromstring(svg)
     _identify_octave_labels(root)
-    svg = ET.tostring(root, encoding="unicode")
+    svg = svg_bytes(root).decode("utf-8")
     renderer = QSvgRenderer(svg.encode("utf-8"))
     if not renderer.isValid():
         raise ValueError("Qt 无法读取刻谱结果。")
@@ -321,7 +321,7 @@ def _engrave_geometry(document: ProjectDocument) -> EngravedGeometry:
         diagnostics.append(EngravingDiagnostic(item.severity, item.code,
                                                item.message[len(prefix):], item.track_id))
     return EngravedGeometry(
-        ET.tostring(root, encoding="unicode"), tuple(renderer.viewBoxF().getRect()),
+        svg_bytes(root).decode("utf-8"), tuple(renderer.viewBoxF().getRect()),
         axis.beats, axis.xs, parts, header_left, header_right, measure_bounds, owners,
         octave_spans, terminal_x,
         max((e.end_beat for e in notation.quantized_events), default=0), diagnostics,

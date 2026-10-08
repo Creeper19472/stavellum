@@ -9,13 +9,23 @@ from .typography import script_runs
 
 SVG_NS = "http://www.w3.org/2000/svg"
 XLINK_NS = "http://www.w3.org/1999/xlink"
-ET.register_namespace("", SVG_NS)
-ET.register_namespace("xlink", XLINK_NS)
 
 _TEXT_VISUAL_ATTRIBUTES = {
     "font-size", "font-family", "font-style", "font-weight", "font-variant",
     "text-decoration", "letter-spacing", "fill", "text-anchor",
 }
+
+
+def svg_bytes(root: ET.Element) -> bytes:
+    """Preserve the namespace spellings Qt needs for SVG glyph references.
+
+    A preview process can receive a compiled scene without importing the
+    engraving modules. Register at serialization time in the current process,
+    rather than relying on an earlier import in the compilation worker.
+    """
+    ET.register_namespace("", SVG_NS)
+    ET.register_namespace("xlink", XLINK_NS)
+    return ET.tostring(root, encoding="utf-8")
 
 
 def _text_attributes(node: ET.Element, inherited: dict[str, str]) -> dict[str, str]:
@@ -137,4 +147,4 @@ def normalize_svg(svg: str, foreground: str = "white") -> str:
             flatten_texts(child, inherited)
 
     flatten_texts(root, {})
-    return ET.tostring(root, encoding="unicode")
+    return svg_bytes(root).decode("utf-8")

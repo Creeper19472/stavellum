@@ -19,6 +19,7 @@ from stavellum.graphics.branding import logo_image
 from stavellum.graphics.icons import draw_image_icon, resolve_icon
 from stavellum.graphics.musicfont import metronome_renderer
 from stavellum.graphics.qt import prepare_render_app
+from stavellum.graphics.svg import svg_bytes
 from stavellum.graphics.typography import _layout, draw_text, draw_text_rect
 from stavellum.presentation._frame import FrameEvaluator, FrameState
 from stavellum.presentation.timeline import FrameLayout
@@ -97,12 +98,12 @@ class RasterFrameRenderer:
                     owner = scene.element_part_ids.get(child.get("id", ""))
                     if owner is not None and owner != part.part_id:
                         parent.remove(child)
-            self.header_renderers[part.part_id] = QSvgRenderer(ET.tostring(part_root, encoding="utf-8"))
+            self.header_renderers[part.part_id] = QSvgRenderer(svg_bytes(part_root))
             for parent in part_root.iter():
                 for child in list(parent):
                     if set(child.get("class", "").split()).intersection({"clef", "keySig", "meterSig", "label", "labelAbbr", "mNum"}):
                         parent.remove(child)
-            self.body_renderers[part.part_id] = QSvgRenderer(ET.tostring(part_root, encoding="utf-8"))
+            self.body_renderers[part.part_id] = QSvgRenderer(svg_bytes(part_root))
         # Convenient inspection handles for single-part scenes.
         self.header_renderer = self.header_renderers[scene.parts[0].part_id]
         self.body_renderer = self.body_renderers[scene.parts[0].part_id]
