@@ -111,3 +111,22 @@ def test_rust_abi_geometry_sizes():
         _fields_ = [("texture", ctypes.c_uint64), ("values", ctypes.c_float * 12)]
 
     assert ctypes.sizeof(Quad) == 56
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(sys.platform != "win32" or not DLL.exists(), reason="Built Rust DLL required")
+def test_repeated_device_creation_releases_vulkan_handles():
+    require_vulkan_device()
+    script = r'''
+from stavellum._rhi import RhiTarget
+for index in range(160):
+    target = RhiTarget(64, 64, 1, "vulkan")
+    target.close()
+print("160 devices created and closed")
+'''
+    result = subprocess.run([sys.executable, "-X", "faulthandler", "-c", script], cwd=ROOT,
+                            capture_output=True, text=True, timeout=120,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                            env={**os.environ, "STAVELLUM_RHI_DLL": str(DLL)})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "160 devices created and closed" in result.stdout

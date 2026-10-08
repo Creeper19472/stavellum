@@ -6,6 +6,7 @@ import copy
 import xml.etree.ElementTree as ET
 
 import pytest
+from native_frames import activity_level, activity_levels, frame_layout
 from PySide6.QtSvg import QSvgRenderer
 
 from stavellum.models import (
@@ -24,8 +25,6 @@ from stavellum.scene import (
     _anchor_x,
     _axis_from_anchors,
     _svg_index,
-    activity_level,
-    activity_levels,
     compile_scene,
     part_state,
 )
@@ -123,7 +122,7 @@ def bar_on_screen(scene, bar: int, seconds: float) -> tuple[float, float]:
     """Observe where a real engraved bar lands in the shared scrolling viewport."""
     left, right = scene.measure_bounds[bar]
     now = scene.camera_x_at(seconds)
-    return tuple(scene.play_x + (x - now) * scene.layout_at(seconds).scale for x in (left, right))
+    return tuple(scene.play_x + (x - now) * frame_layout(scene, seconds).scale for x in (left, right))
 
 
 def first_bar_entry(scene, bar: int, maximum: float) -> float:
@@ -183,11 +182,11 @@ def test_empty_opening_keeps_the_first_staff_until_its_tempo_scrolls_out():
                               if event.track_id != "carrier" or event.start_tick >= 64 * 480]
     scene = compile_scene(document)
     assert scene.tempo_mark.owner_id == "carrier"
-    assert scene.layout_at(0).rows["carrier"].opacity == 1
+    assert frame_layout(scene, 0).rows["carrier"].opacity == 1
     assert all(event.start_tick >= 64 * 480 for event in document.project.notes)
     exit_time = scene.layout.tempo_exit_time
-    assert scene.layout_at(exit_time - 1e-5).rows["carrier"].opacity == 1
-    assert scene.layout_at(exit_time + 1).rows["carrier"].opacity == 0
+    assert frame_layout(scene, exit_time - 1e-5).rows["carrier"].opacity == 1
+    assert frame_layout(scene, exit_time + 1).rows["carrier"].opacity == 0
     assert scene.layout.padding_at("carrier", exit_time + 1) == 0
 
 
@@ -243,7 +242,7 @@ def test_current_beat_stays_in_left_corridor_at_every_zoom():
     for index in range(2000):
         time = index / 60
         exact = scene.axis.x_at(scene.beat_at_time(scene.settings.audio_time(time)))
-        displayed = scene.play_x + (exact - scene.camera_x_at(time)) * scene.layout_at(time).scale
+        displayed = scene.play_x + (exact - scene.camera_x_at(time)) * frame_layout(scene, time).scale
         assert left - 1e-6 <= displayed <= right + 1e-6
 
 
@@ -266,7 +265,7 @@ def test_part_state_preserves_the_layout_curves_derivatives_after_interruption()
     part.opacity_keys = curve.opacity_keys()
     assert curve.sample(.3).velocity != 0
     for time in (.15, .299, .3, .301, .45, .65, .8, 1):
-        assert part_state(part, time, scene.settings)[0] == scene.layout_at(time).rows[part.part_id].opacity
+        assert part_state(part, time, scene.settings)[0] == frame_layout(scene, time).rows[part.part_id].opacity
 
 
 def test_single_instrument_remains_visible_through_silence_and_tail():

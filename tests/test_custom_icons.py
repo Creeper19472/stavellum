@@ -407,7 +407,7 @@ for project in sorted(directory.glob('*.stproj')):
         assert renderer.backend == backend
         frame = renderer.render_frame(.25)
         frame.save(str(directory / (project.stem + '-' + backend + '.png')))
-        layout = scene.layout_at(.25)
+        layout = renderer._evaluator.evaluate(.25).layout
         row = layout.rows[scene.parts[0].part_id]
         x, y, w, h = row.indicator_rect
         center_x = x - scene.layout.icon_source_gap * layout.scale - row.icon_size / 2

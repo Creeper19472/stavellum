@@ -6,6 +6,7 @@ import math
 from dataclasses import replace
 
 import pytest
+from native_frames import frame_layout, frame_state, raster_state
 from test_render import pixels, rendered_document
 
 from stavellum.models import NoteEvent, TrackInfo
@@ -36,8 +37,8 @@ def dense_scene(request):
 def test_dense_high_resolution_warm_frames_stop_rasterizing(dense_scene):
     with FrameRenderer(dense_scene) as renderer:
         time = 1.0
-        layout, world_x = dense_scene.layout_at(time), dense_scene.camera_x_at(time)
-        plan = renderer._tile_plan(layout, world_x)
+        layout = frame_layout(dense_scene, time)
+        plan = renderer._tile_plan(frame_state(dense_scene, time))
         assert plan.level > 0
         assert plan.raster_scale >= layout.scale
         assert plan.working_bytes <= renderer.cache_limit
@@ -68,12 +69,11 @@ def test_dense_high_resolution_warm_frames_stop_rasterizing(dense_scene):
 
 def test_over_budget_frame_preserves_its_resident_subset(dense_scene):
     with FrameRenderer(dense_scene) as renderer:
-        layout = dense_scene.layout_at(1)
-        world_x = dense_scene.camera_x_at(1)
-        level = renderer._raster_level(layout.scale)
+        layout = frame_layout(dense_scene, 1)
+        level = frame_state(dense_scene, 1).tile_level
         tile = renderer._tile(dense_scene.parts[0], -30, level)
         renderer.cache_limit = 2 * tile.sizeInBytes()
-        plan = renderer._tile_plan(layout, world_x)
+        plan = renderer._tile_plan(frame_state(dense_scene, 1))
         visible_count = len(layout.rows) * (plan.last_index - plan.first_index + 1)
         assert 0 < len(plan.resident_keys) < visible_count
         assert plan.working_bytes > renderer.cache_limit
@@ -91,20 +91,21 @@ def test_over_budget_frame_preserves_its_resident_subset(dense_scene):
         # Different history selects the same quality and pinned subset.
         with FrameRenderer(dense_scene) as clean:
             clean.cache_limit = renderer.cache_limit
-            assert clean._tile_plan(layout, world_x).resident_keys == plan.resident_keys
+            assert clean._tile_plan(frame_state(dense_scene, 1)).resident_keys == plan.resident_keys
             assert pixels(clean.render_frame(1)) == first
 
 
 def test_raster_layer_boundaries_never_upsample_or_depend_on_cache(dense_scene):
-    with FrameRenderer(dense_scene) as renderer:
+    with FrameRenderer(dense_scene):
         for exponent in range(7):
             boundary = math.ldexp(dense_scene.scale, -exponent)
             for scale in (math.nextafter(boundary, 0), boundary,
                           math.nextafter(boundary, math.inf)):
                 if scale > dense_scene.scale:
                     continue
-                level = renderer._raster_level(scale)
-                raster_scale = math.ldexp(dense_scene.scale, -level)
+                state = raster_state(dense_scene, scale)
+                scale = state.layout.scale
+                raster_scale = state.tile_raster_scale
                 assert raster_scale >= scale
                 assert raster_scale / 2 < scale
 

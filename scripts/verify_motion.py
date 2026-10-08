@@ -14,6 +14,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from stavellum._frame import FrameEvaluator
 from stavellum.models import load_document
 from stavellum.render import FrameRenderer
 from stavellum.scene import compile_scene
@@ -31,13 +32,17 @@ def statistics(values: list[float]) -> dict[str, float]:
 
 
 def motion_metrics(scene) -> dict:
+    with FrameEvaluator(scene) as evaluator:
+        return _motion_metrics(scene, evaluator)
+
+
+def _motion_metrics(scene, evaluator) -> dict:
     fps = 60
     duration = max(0.0, scene.score_duration + scene.settings.score_start_in_audio_sec)
     count = math.ceil(duration * fps) + 1
     delay = scene.settings.intro_delay_seconds
     exact = [scene.axis.x_at(scene.beat_at_time(index / fps)) for index in range(count)]
-    camera = ([scene.camera_x_at(delay + index / fps) for index in range(count)]
-              if hasattr(scene, "camera_x_at") else exact)
+    camera = [evaluator.evaluate(delay + index / fps).world_x for index in range(count)]
 
     def movement(velocities):
         changes = [right - left for left, right in zip(velocities, velocities[1:])]
@@ -60,8 +65,8 @@ def motion_metrics(scene) -> dict:
     urgent = getattr(scene.layout, "urgent_intervals", [])
     for index in range(count - 1):
         time_now = delay + index / fps
-        first = scene.layout_at(time_now if hasattr(scene, "camera_x_at") else index / fps)
-        last = scene.layout_at(time_now + 1 / fps if hasattr(scene, "camera_x_at") else (index + 1) / fps)
+        first = evaluator.evaluate(time_now).layout
+        last = evaluator.evaluate(time_now + 1 / fps).layout
         max_drift = max(max_drift, abs(exact[index] - camera[index]) * first.scale)
         pan_delta = (camera[index + 1] - camera[index]) * last.scale
         zoom_delta = (scene.body_right - scene.play_x) * (last.scale / first.scale - 1)

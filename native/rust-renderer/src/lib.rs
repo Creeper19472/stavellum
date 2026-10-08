@@ -20,6 +20,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::{c_char, c_void, CStr, CString};
+use std::ops::Deref;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 use std::slice;
@@ -162,11 +163,44 @@ fn guarded(operation: impl FnOnce() -> Result<(), String>) -> i32 {
     status
 }
 
-// Field order fixes the drop order: the device must be destroyed before the
-// instance, and the instance before the loader entry point.
+// ash handles do not destroy Vulkan objects when dropped. These owners also
+// release partially initialized GPU state when creation returns an error.
+struct DeviceOwner(ash::Device);
+
+impl Deref for DeviceOwner {
+    type Target = ash::Device;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Drop for DeviceOwner {
+    fn drop(&mut self) {
+        unsafe { self.0.destroy_device(None) };
+    }
+}
+
+struct InstanceOwner(ash::Instance);
+
+impl Deref for InstanceOwner {
+    type Target = ash::Instance;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Drop for InstanceOwner {
+    fn drop(&mut self) {
+        unsafe { self.0.destroy_instance(None) };
+    }
+}
+
+// Drop the device before the instance, then the loader entry point.
 struct Gpu {
-    device: ash::Device,
-    instance: ash::Instance,
+    device: DeviceOwner,
+    instance: InstanceOwner,
     _entry: ash::Entry,
     physical: vk::PhysicalDevice,
     queue: vk::Queue,
@@ -186,8 +220,10 @@ impl Gpu {
             .application_name(c"stavellum")
             .api_version(vk::make_api_version(0, 1, 0, 0));
         let info = vk::InstanceCreateInfo::default().application_info(&application);
-        let instance = unsafe { entry.create_instance(&info, None) }
-            .map_err(|_| "Cannot create Vulkan instance".to_owned())?;
+        let instance = InstanceOwner(
+            unsafe { entry.create_instance(&info, None) }
+                .map_err(|_| "Cannot create Vulkan instance".to_owned())?,
+        );
         let adapters = unsafe { instance.enumerate_physical_devices() }
             .map_err(|_| "Cannot initialize requested RHI backend".to_owned())?;
         let preferred = std::env::var("STAVELLUM_RHI_GPU").unwrap_or_default();
@@ -243,8 +279,10 @@ impl Gpu {
             .queue_priorities(&priorities);
         let queue_infos = [queue_info];
         let device_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_infos);
-        let device = unsafe { instance.create_device(physical, &device_info, None) }
-            .map_err(|_| "Cannot initialize requested RHI backend".to_owned())?;
+        let device = DeviceOwner(
+            unsafe { instance.create_device(physical, &device_info, None) }
+                .map_err(|_| "Cannot initialize requested RHI backend".to_owned())?,
+        );
         let queue = unsafe { device.get_device_queue(queue_family, 0) };
         let memory = unsafe { instance.get_physical_device_memory_properties(physical) };
         let find = |wanted: vk::MemoryPropertyFlags| {
@@ -419,8 +457,8 @@ struct Renderer {
 
 impl Drop for Renderer {
     fn drop(&mut self) {
-        // Resources are freed explicitly; the ash Device and Instance
-        // wrappers destroy themselves afterwards in Gpu field order.
+        // Resources are freed explicitly; the device/instance owners destroy
+        // their Vulkan handles afterwards in Gpu field order.
         unsafe {
             let device = &self.gpu.device;
             let _ = device.device_wait_idle();

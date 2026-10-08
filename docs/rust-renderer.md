@@ -5,11 +5,30 @@ against Vulkan through `ash` — no Qt RHI, no wgpu, no C++ — and keeps the ex
 `sprhi_*` C ABI (version 3) that `src/stavellum/_rhi.py` loads. The
 application still uses Python/PySide6 for imports, notation, layout and UI.
 
-The companion `native/rust-core` library exposes `spcore_*` ABI version 1
-through `src/stavellum/_core.py`. It evaluates time-axis, camera, layout,
-activity and tile-plan math and has parity tests against Python. Production
-renderers do not currently call this library; its inclusion does not imply
-an active scene-evaluation speedup.
+The required `native/rust-core` library exposes `spcore_*` ABI version 1
+through `src/stavellum/_core.py`. A renderer-owned `FrameEvaluator` serializes
+compiled curves and notes once, then evaluates camera position, layout rows,
+activity and tile-plan geometry with one native call per uncached time point.
+CPU and Vulkan rendering share the same evaluator, including GPU-to-CPU recovery.
+Its five-state cache reuses batch lookahead and drawing results without retaining
+images. Python still compiles engraving, camera parameters and layout curves;
+its tile residency selection continues to enforce the actual cache budget.
+`FrameState` owns immutable Python rows and activity values, independently of
+native buffers. Native handles belong to renderers, never `CompiledScene` or
+the disk compilation cache. Rebuilding compiled settings creates a new evaluator;
+temporary metadata display overrides do not rebuild it.
+
+Renderer closure releases the shared evaluator even if graphics cleanup fails.
+The Vulkan device and instance have explicit native owners, including partial
+initialization failures; ash handles alone do not release those Vulkan objects.
+
+Scene compute errors propagate independently of graphics errors. Missing or
+incompatible core DLLs fail rendering even in CPU mode; there is no Python scene
+compute fallback. Ordinary imports and project inspection need no native core.
+Rebuild and install both libraries before running rendering tests or packaging.
+Wheels require and include the core DLL; editable installation can precede building.
+Only the explicit `STAVELLUM_CORE_DLL` override or the installed package resource
+is selected; development Cargo outputs are never selected implicitly.
 
 ## Architecture
 
@@ -68,8 +87,8 @@ $env:STAVELLUM_RHI_DLL = "$PWD/src/stavellum/native/rhi/stavellum_rhi.dll"
 ```
 
 Remove `STAVELLUM_RHI_DLL` to restore automatic backend selection.
-`STAVELLUM_CORE_DLL` can override the scene core path for direct callers and
-parity tests; it does not enable scene evaluation in production renderers.
+`STAVELLUM_CORE_DLL` overrides the required scene core for all rendering paths.
+An invalid path or ABI is an error, rather than a request to use Python.
 
 ## Historical performance (RTX 5070 Laptop GPU, synchronous ABI, readback included)
 
@@ -109,6 +128,39 @@ pre-submission error rejection with exact messages, cross-thread release,
 random-access reproducibility and CPU-reference comparison on production
 scenes.
 
-Tests that require an installed native DLL or a usable Vulkan device can skip
-when those prerequisites are unavailable. Report those skips separately from
+Vulkan tests may skip when no usable graphics device is available. Required core
+tests fail when the core DLL is missing or incompatible. Report those skips separately from
 passing checks.
+
+## Scene evaluation verification and performance
+
+The completed migration measurements and their limits are recorded in
+[the core evaluation report](core-evaluation-performance.md).
+
+The independent pre-migration Python arithmetic lives only in test references.
+Numerical parity, pixel parity against an explicit Git baseline, random seeking,
+cache residency and lifecycle behavior are covered separately. Runtime reports
+include `scene_compute_backend`, the selected library and ABI, initialization
+cost, `scene_evaluation_count`, `scene_evaluation_seconds` and cache hits.
+Export stream counters are frozen deltas for that stream.
+Camera integration retains low-order floating terms when summing segments,
+matching Python `math.fsum`; even a one-ulp coordinate difference can change
+antialiased pixels. Float checks use both relative and absolute tolerances of
+`1e-9`; pixel bytes, tile indices, budgets and residency sets remain exact.
+
+```powershell
+uv run python scripts/benchmark_core.py --baseline-ref <revision> --repeats 5
+```
+
+This diagnostic runs materialized frame evaluation plus CPU/Vulkan frame
+production at 1080p and 4K, with cold and warm tile caches and actual FFmpeg
+video encoding. Compilation is excluded from throughput. Pixel comparisons
+and report serialization run outside timing. The baseline reference is explicit;
+no Python reference evaluator is shipped as a selectable production backend.
+The report records library fingerprints, initialization cost and native versus
+materialized evaluation timings. Quality checks include random and repeated
+times, plus export batch sizes 1/2/4 (subject to the existing output memory cap).
+Use `--frames 600 --phases warm --cases dense --sizes 1920x1080 --backends cpu`
+to investigate a noisy warm-cache measurement with longer alternating samples.
+An evaluation speedup below 3× in dense cases or any median regression above
+5% prevents the report's `acceptance_met` flag from passing.

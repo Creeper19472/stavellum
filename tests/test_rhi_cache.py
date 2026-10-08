@@ -6,6 +6,7 @@ import hashlib
 import math
 
 import pytest
+from native_frames import frame_layout, frame_state
 from test_render_cache import dense_scene as dense_scene
 from test_rhi import FakeTarget
 
@@ -42,8 +43,8 @@ def command_pixels(renderer, seconds):
 def test_dense_high_resolution_warm_commands_stop_rasterizing(dense_scene, fake_native):
     with RhiFrameRenderer(dense_scene) as renderer:
         assets = renderer._assets
-        layout, world_x = dense_scene.layout_at(1), dense_scene.camera_x_at(1)
-        plan = assets._tile_plan(layout, world_x)
+        layout = frame_layout(dense_scene, 1)
+        plan = assets._tile_plan(frame_state(dense_scene, 1))
         assert plan.level > 0 and plan.raster_scale >= layout.scale
         assert plan.working_bytes <= assets.cache_limit
         first = command_pixels(renderer, 1)
@@ -78,11 +79,11 @@ def test_dense_high_resolution_warm_commands_stop_rasterizing(dense_scene, fake_
 def test_over_budget_commands_keep_hot_assets_and_pixels_across_history(dense_scene, fake_native):
     with RhiFrameRenderer(dense_scene) as renderer:
         assets = renderer._assets
-        layout, world_x = dense_scene.layout_at(1), dense_scene.camera_x_at(1)
-        level = assets._raster_level(layout.scale)
+        layout = frame_layout(dense_scene, 1)
+        level = frame_state(dense_scene, 1).tile_level
         tile = assets._tile(dense_scene.parts[0], -30, level)
         assets.cache_limit = 2 * tile.sizeInBytes()
-        plan = assets._tile_plan(layout, world_x)
+        plan = assets._tile_plan(frame_state(dense_scene, 1))
         visible_count = len(layout.rows) * (plan.last_index - plan.first_index + 1)
         assert 0 < len(plan.resident_keys) < visible_count
         assert plan.working_bytes > assets.cache_limit

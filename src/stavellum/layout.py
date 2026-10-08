@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from bisect import bisect_left, bisect_right
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from heapq import heappop, heappush
 from typing import TYPE_CHECKING
@@ -145,7 +146,7 @@ class RowLayout:
 @dataclass(slots=True, frozen=True)
 class FrameLayout:
     scale: float
-    rows: dict[str, RowLayout]
+    rows: Mapping[str, RowLayout]
     bounds: tuple[float, float]
     region_bounds: tuple[float, float]
 
@@ -198,30 +199,6 @@ class LayoutTimeline:
 
     def padding_at(self, part_id: str, time: float) -> float:
         return self.tempo_padding if part_id == self.tempo_owner_id and time < self.tempo_exit_time else 0.0
-
-    def at(self, time: float) -> FrameLayout:
-        scale = self.scale_at(time)
-        rows = {}
-        visible_bounds = []
-        for part_id, track in self.tops.items():
-            top = track.sample(time).value
-            alpha = max(0.0, min(1.0, self.opacities[part_id].sample(time).value))
-            height, staff_midpoint = self.part_dimensions[part_id]
-            indicator_height = self.indicator_source_height * scale
-            indicator_width = self.indicator_source_width * scale
-            indicator_top = top + staff_midpoint * scale - indicator_height / 2
-            rectangle = (self.indicator_right - indicator_width, indicator_top,
-                         indicator_width, indicator_height)
-            bounds = (min(top - self.padding_at(part_id, time) * scale, indicator_top),
-                      max(top + height * scale, indicator_top + indicator_height))
-            rows[part_id] = RowLayout(top, alpha, rectangle, bounds, self.icon_source_size * scale)
-            if alpha > 1e-9:
-                visible_bounds.append(bounds)
-        region = self.region_at(time)
-        center = sum(region) / 2
-        bounds = ((min(item[0] for item in visible_bounds), max(item[1] for item in visible_bounds))
-                  if visible_bounds else (center, center))
-        return FrameLayout(scale, rows, bounds, region)
 
     def finish(self) -> None:
         times = sorted({key.time for track in [self.zoom, *self.tops.values(), *self.opacities.values()]

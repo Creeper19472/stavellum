@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from native_frames import frame_layout
 
 from stavellum.export import audio_duration, export_video
 from stavellum.models import (
@@ -59,7 +60,7 @@ def probe(path: Path) -> dict:
 
 def indicator_brightness(scene, image: np.ndarray, time: float) -> float:
     """Sample complete interior pixels at the indicator's current position."""
-    x, top, width, height = scene.layout_at(time).rows[scene.parts[0].part_id].indicator_rect
+    x, top, width, height = frame_layout(scene, time).rows[scene.parts[0].part_id].indicator_rect
     left = max(0, math.ceil(x + 1))
     right = min(image.shape[1], math.floor(x + width - 1))
     first = max(0, math.ceil(top + 2))

@@ -15,6 +15,7 @@ from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtSvg import QSvgRenderer
 
+from ._frame import FrameEvaluator, FrameState
 from .branding import logo_image
 from .gpu import GpuBackendError
 from .icons import draw_image_icon, resolve_icon
@@ -22,7 +23,7 @@ from .layout import FrameLayout, ease
 from .models import RenderSettings
 from .musicfont import metronome_renderer
 from .qt import prepare_render_app
-from .scene import CompiledScene, ScenePart, activity_levels
+from .scene import CompiledScene, ScenePart
 from .typography import _layout, draw_text, draw_text_rect
 
 TileKey = tuple[str, int, int]
@@ -91,6 +92,7 @@ class _ExportTimes:
 
 def _export_native_delta(current, baseline):
     counters = ("gpu_submit_seconds", "fence_wait_seconds", "memory_copy_seconds",
+                "scene_evaluation_count", "scene_evaluation_seconds", "scene_evaluation_cache_hits",
                 "memory_copy_bytes", "gpu_submitted_frame_count", "owned_readback_frame_count",
                 "copied_readback_frame_count", "inplace_format_conversion_seconds",
                 "inplace_format_conversion_bytes", "gpu_submission_count",
@@ -112,9 +114,9 @@ def overlay_opacity(time: float, settings: RenderSettings, *, hide: bool, hold: 
     return opacity
 
 
-def activity_lamp_color(part: ScenePart, time: float) -> QColor | None:
+def activity_lamp_color(part: ScenePart, activity: tuple[float, float]) -> QColor | None:
     """Brighten the Rack hue, with headroom for a brief note-on highlight."""
-    level, attack = activity_levels(part, time)
+    level, attack = activity
     alpha = round(level * 255)
     if alpha <= 0:
         return None
@@ -174,6 +176,15 @@ class RasterFrameRenderer:
             "readback_mode_history": [],
             "readback_fallback_reasons": [],
         }
+        self._evaluator = FrameEvaluator(scene)
+        try:
+            self._prepare_assets()
+        except BaseException:
+            self._evaluator.close()
+            raise
+
+    def _prepare_assets(self) -> None:
+        scene = self.scene
         self.tempo_renderer = metronome_renderer()
         root = ET.fromstring(scene.svg)
         self.header_renderers: dict[str, QSvgRenderer] = {}
@@ -221,6 +232,7 @@ class RasterFrameRenderer:
         """Report measured CPU cache/timing separately from configured GPU memory."""
         return {
             **self._export_report,
+            **self._evaluator.report(),
             "requested_render_backend": self.requested_backend,
             "render_backend": self.render_backend,
             "gpu_info": dict(self.gpu_info),
@@ -242,16 +254,19 @@ class RasterFrameRenderer:
     def close(self) -> None:
         if self._closed:
             return
-        if self._export_stream is not None:
-            self._export_stream.close()
-        self.cache.clear()
-        self.headers.clear()
-        self._gpu_icons.clear()
-        self._gpu_tempo = None
-        self._octave_labels.clear()
-        self._logo = None
-        self.cache_bytes = 0
-        self._closed = True
+        try:
+            if self._export_stream is not None:
+                self._export_stream.close()
+        finally:
+            self._evaluator.close()
+            self.cache.clear()
+            self.headers.clear()
+            self._gpu_icons.clear()
+            self._gpu_tempo = None
+            self._octave_labels.clear()
+            self._logo = None
+            self.cache_bytes = 0
+            self._closed = True
 
     def __enter__(self):
         return self
@@ -286,26 +301,11 @@ class RasterFrameRenderer:
             self.svg_raster_seconds += clock.perf_counter() - started
         return image
 
-    def _raster_level(self, display_scale: float) -> int:
-        """Choose the cheapest power-of-two raster that never needs upsampling."""
-        level = max(0, math.floor(math.log2(self.scene.scale / display_scale)))
-        # Guard roundoff at exact layer boundaries without rounding up into a
-        # raster that is smaller than the requested display resolution.
-        while level and math.ldexp(self.scene.scale, -level) < display_scale:
-            level -= 1
-        while math.ldexp(self.scene.scale, -level - 1) >= display_scale:
-            level += 1
-        return level
-
-    def _tile_plan(self, layout: FrameLayout, world_x: float) -> TilePlan:
-        level = self._raster_level(layout.scale)
-        raster_scale = math.ldexp(self.scene.scale, -level)
-        left = world_x - (self.scene.play_x - self.scene.body_left) / layout.scale
-        right = world_x + (self.scene.body_right - self.scene.play_x) / layout.scale
-        first = math.floor(left * raster_scale / self.TILE_PIXELS)
-        last = math.floor(right * raster_scale / self.TILE_PIXELS)
+    def _tile_plan(self, state: FrameState) -> TilePlan:
+        layout, world_x = state.layout, state.world_x
+        level, raster_scale = state.tile_level, state.tile_raster_scale
+        first, last = state.tile_first, state.tile_last
         candidates = []
-        working_bytes = 0
         for order, part in enumerate(self.scene.parts):
             row = layout.rows.get(part.part_id)
             if row is None or row.opacity <= 1e-6:
@@ -315,14 +315,13 @@ class RasterFrameRenderer:
             for index in range(first, last + 1):
                 distance = abs((index + 0.5) * self.TILE_PIXELS - world_x * raster_scale)
                 candidates.append((distance, order, index, (part.part_id, level, index), size))
-                working_bytes += size
         remaining = self.cache_limit
         resident = set()
         for _, _, _, key, size in sorted(candidates):
             if size <= remaining:
                 resident.add(key)
                 remaining -= size
-        return TilePlan(level, raster_scale, first, last, working_bytes, frozenset(resident))
+        return TilePlan(level, raster_scale, first, last, state.tile_working_bytes, frozenset(resident))
 
     @contextmanager
     def _pinned_tiles(self, keys: frozenset[TileKey]):
@@ -444,15 +443,15 @@ class RasterFrameRenderer:
 
     def paint_frame(self, painter: QPainter, time: float) -> None:
         """Draw the absolute-time scene onto a CPU image."""
-        world_x = self.scene.camera_x_at(time)
-        layout = self.scene.layout_at(time)
-        plan = self._tile_plan(layout, world_x)
+        state = self._evaluator.evaluate(time)
+        world_x, layout = state.world_x, state.layout
+        plan = self._tile_plan(state)
         self.visible_tile_working_peak_bytes = max(self.visible_tile_working_peak_bytes,
                                                  plan.working_bytes)
         with self._pinned_tiles(plan.resident_keys):
-            self._paint_score(painter, time, layout, world_x, plan)
+            self._paint_score(painter, state, plan)
         self._draw_metadata(painter, time)
-        self._draw_tempo(painter, time, layout)
+        self._draw_tempo(painter, time, layout, world_x)
         overlay = self.logo_overlay(time)
         if overlay is not None:
             image, rect, opacity = overlay
@@ -484,11 +483,10 @@ class RasterFrameRenderer:
         image, rect = self._logo
         return image, rect, opacity
 
-    def _paint_score(self, painter: QPainter, time: float, layout: FrameLayout,
-                     world_x: float, plan: TilePlan) -> None:
+    def _paint_score(self, painter: QPainter, state: FrameState, plan: TilePlan) -> None:
         scene = self.scene
         s = scene.settings
-        audio_time = s.audio_time(time)
+        time, layout, world_x = state.presentation_time, state.layout, state.world_x
         in_intro = time < s.intro_delay_seconds
         painter.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing | QPainter.RenderHint.SmoothPixmapTransform)
         scale = layout.scale
@@ -536,7 +534,7 @@ class RasterFrameRenderer:
                 header = self._header(part)
                 painter.drawImage(QRectF(scene.body_left - header.width() * header_ratio - 15 * s.width / 1920, row_y, header.width() * header_ratio, header.height() * header_ratio), header)
                 rectangle = QRectF(*row.indicator_rect)
-                color = None if in_intro else activity_lamp_color(part, audio_time)
+                color = None if in_intro else activity_lamp_color(part, state.activity[part.part_id])
                 if color is not None:
                     painter.fillRect(rectangle, color)
                 else:
@@ -609,12 +607,12 @@ class RasterFrameRenderer:
                     row_y += 35 * unit
         painter.restore()
 
-    def _draw_tempo(self, painter: QPainter, time: float, layout: FrameLayout) -> None:
+    def _draw_tempo(self, painter: QPainter, time: float, layout: FrameLayout, world_x: float) -> None:
         mark = self.scene.tempo_mark
         if mark is None or time >= self.scene.layout.tempo_exit_time:
             return
         row = layout.rows[mark.owner_id]
-        x = self.scene.play_x + (mark.x - self.scene.camera_x_at(time)) * layout.scale
+        x = self.scene.play_x + (mark.x - world_x) * layout.scale
         y = row.top - mark.padding * layout.scale
         # Lay out once in staff-space units, then transform the complete group.
         # A fixed font size avoids integer-pixel jumps during animated zoom.
@@ -745,6 +743,9 @@ class FrameRenderer(RasterFrameRenderer):
                     self.close()
                     raise GpuBackendError(f"已选择 Vulkan GPU 渲染，但 Vulkan 不可用：{exc}") from exc
                 self.fallback_reasons.append(str(exc))
+            except BaseException:
+                super().close()
+                raise
             else:
                 self.render_backend = "gpu"
                 native = self._gpu.backend_report()
@@ -756,6 +757,8 @@ class FrameRenderer(RasterFrameRenderer):
         native = self._last_gpu_report if self._gpu is None else self._gpu.backend_report()
         base = super().backend_report()
         report = {**base, **native}
+        # The shared core continues evaluating CPU frames after GPU recovery.
+        report.update(self._evaluator.report())
         for key in ("requested_render_backend", "render_backend", "render_fallback_reasons",
                     "render_seconds", "rendered_frame_count", "readback_mode",
                     "readback_mode_history", "readback_fallback_reasons"):
@@ -812,14 +815,20 @@ class FrameRenderer(RasterFrameRenderer):
     def close(self) -> None:
         if self._closed:
             return
-        if self._export_stream is not None:
-            self._export_stream.close()
-        if self._gpu is not None:
+        try:
+            if self._export_stream is not None:
+                self._export_stream.close()
+        finally:
             gpu = self._gpu
-            self._last_gpu_report = gpu.backend_report()
-            gpu.close()
             self._gpu = None
-        super().close()
+            try:
+                if gpu is not None:
+                    try:
+                        self._last_gpu_report = gpu.backend_report()
+                    finally:
+                        gpu.close()
+            finally:
+                super().close()
 
 
 class ExportFrameStream(Iterator[tuple[int, QImage]]):
@@ -866,7 +875,8 @@ class ExportFrameStream(Iterator[tuple[int, QImage]]):
     def _target_report(self):
         if getattr(self, "_final_target_report", None) is not None:
             return self._final_target_report
-        return self._gpu_target.backend_report() if self._gpu_target is not None else {}
+        native = self._gpu_target.backend_report() if self._gpu_target is not None else {}
+        return {**native, **self.renderer._evaluator.report()}
 
     def __next__(self):
         if self._closed:
@@ -919,7 +929,8 @@ class ExportFrameStream(Iterator[tuple[int, QImage]]):
                  ("gpu_batch_peak_size", "readback_output_peak_bytes", "readback_staging_peak_bytes")}
         fallback_reasons = (self.renderer.fallback_reasons[self._fallback_start:]
                             if self._final_fallback_reasons is None else self._final_fallback_reasons)
-        return {**values, "readback_mode": self._modes[-1] if self._modes else "unused",
+        compute = {key: value for key, value in current.items() if key.startswith("scene_compute_")}
+        return {**values, **compute, "readback_mode": self._modes[-1] if self._modes else "unused",
                 "cpu_format_conversion_seconds": self._cpu_copy_seconds,
                 "cpu_format_conversion_bytes": self._cpu_copy_bytes,
                 "readback_mode_history": list(self._modes),
@@ -953,6 +964,8 @@ class ExportFrameStream(Iterator[tuple[int, QImage]]):
                 histogram = totals.setdefault(key, {})
                 for size, count in value.items():
                     histogram[size] = histogram.get(size, 0) + count
+            elif key.startswith("scene_compute_"):
+                totals[key] = value
             else:
                 totals[key] = totals.get(key, 0) + value
         if self.renderer._export_stream is self:

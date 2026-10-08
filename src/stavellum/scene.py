@@ -16,16 +16,13 @@ from PySide6.QtSvg import QSvgRenderer
 from .axis import TimeAxis
 from .camera import CameraTimeline, compile_camera
 from .icons import resolve_icon
-from .layout import FrameLayout, LayoutTimeline, _Track, compile_layout, ease
+from .layout import LayoutTimeline, _Track, compile_layout, ease
 from .mapping import activity_color
 from .models import Diagnostic, IconAsset, Metadata, ProjectDocument, RenderSettings
 from .musicfont import metronome_renderer
 from .qt import ensure_app
 from .svg import normalize_svg
 from .typography import _layout
-
-ACTIVITY_ATTACK_SECONDS = 0.1
-ACTIVITY_RELEASE_SECONDS = 0.12
 
 
 @dataclass(slots=True)
@@ -174,11 +171,6 @@ class CompiledScene:
     def beat_at_time(self, time: float) -> float:
         return (time - self.settings.score_start_in_audio_sec) * self.bpm / 60
 
-    def layout_at(self, time: float) -> FrameLayout:
-        if self.layout is None:
-            raise RuntimeError("谱面尚未编译排版时间轴。")
-        return self.layout.at(time)
-
     def camera_x_at(self, presentation_time: float) -> float:
         if self.camera is None:
             raise RuntimeError("谱面尚未编译相机时间轴。")
@@ -227,30 +219,6 @@ def part_state(part: ScenePart, time: float, settings: RenderSettings) -> tuple[
         opacity = max(opacity, enter * leave)
         occupancy = max(occupancy, occupy_enter * occupy_leave)
     return opacity, occupancy
-
-
-def activity_levels(part: ScenePart, time: float) -> tuple[float, float]:
-    """Sustained activity and onset emphasis at absolute audio time."""
-    # Envelopes indicate MIDI events, not measured audio loudness.
-    level = attack = 0.0
-    for note in part.notes:
-        if time < note.start or note.velocity <= 0:
-            continue
-        if time < note.end:
-            note_level = note.velocity / 127
-        elif time < note.end + ACTIVITY_RELEASE_SECONDS:
-            note_level = note.velocity / 127 * (1 - ease((time - note.end) / ACTIVITY_RELEASE_SECONDS))
-        else:
-            continue
-        level = max(level, note_level)
-        age = time - note.start
-        if age < ACTIVITY_ATTACK_SECONDS:
-            attack = max(attack, note_level * (1 - ease(age / ACTIVITY_ATTACK_SECONDS)))
-    return level, attack
-
-
-def activity_level(part: ScenePart, time: float) -> float:
-    return activity_levels(part, time)[0]
 
 
 def _classes(el: ET.Element) -> set[str]:

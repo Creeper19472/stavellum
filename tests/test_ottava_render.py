@@ -8,6 +8,7 @@ from fractions import Fraction
 
 import pytest
 from music21 import chord, clef, key, meter, note, spanner, stream
+from native_frames import frame_layout
 from PySide6.QtGui import QImage
 from PySide6.QtSvg import QSvgRenderer
 from test_rhi import FakeTarget
@@ -145,7 +146,7 @@ def test_left_reminder_waits_for_whole_number_and_ends_with_line(octave_scene):
     scene = octave_scene()
     mark, = scene.octave_spans
     part = scene.parts[0]
-    layout = scene.layout_at(5)
+    layout = frame_layout(scene, 5)
     offset = (scene.play_x - scene.body_left) / layout.scale
     with RasterFrameRenderer(scene) as assets:
         for left, present in [(mark.label_right - 0.01, False),
@@ -161,7 +162,7 @@ def test_reminder_scales_with_row_and_disappears_when_hidden(octave_scene):
     scene = octave_scene()
     part = scene.parts[0]
     mark, = scene.octave_spans
-    layout = scene.layout_at(5)
+    layout = frame_layout(scene, 5)
     left = (mark.label_right + mark.end_x) / 2
     with RasterFrameRenderer(scene) as assets:
         def overlays(frame_layout):
@@ -189,7 +190,7 @@ def test_cpu_reminder_pixels_are_identical_after_random_seeking(octave_scene):
             return bytes(frame.constBits())
 
         expected = {time: pixels(time) for time in times}
-        assert any(assets._octave_overlays(scene.parts[0], scene.layout_at(time),
+        assert any(assets._octave_overlays(scene.parts[0], frame_layout(scene, time),
                                            scene.camera_x_at(time)) for time in times)
         for time in (12, 0, 15, 4, 2, 8, 0):
             assert pixels(time) == expected[time]
@@ -197,7 +198,7 @@ def test_cpu_reminder_pixels_are_identical_after_random_seeking(octave_scene):
         labels = [replace(mark, label=label) for label in ("8va", "8vb", "15ma", "15mb")]
         scene.octave_spans = labels
         left = (mark.label_right + mark.end_x) / 2
-        layout = scene.layout_at(5)
+        layout = frame_layout(scene, 5)
         assets._octave_overlays(scene.parts[0], layout,
                                 left + (scene.play_x - scene.body_left) / layout.scale)
         assert len(assets._octave_labels) == 4
@@ -207,13 +208,14 @@ def test_rhi_uses_same_cached_reminder_asset_position_mask_and_opacity(octave_sc
     scene = octave_scene()
     part = scene.parts[0]
     mark, = scene.octave_spans
-    layout = scene.layout_at(5)
+    layout = frame_layout(scene, 5)
     layout = replace(layout, rows={part.part_id: replace(layout.rows[part.part_id], opacity=0.4)})
     world = (mark.label_right + mark.end_x) / 2 + (scene.play_x - scene.body_left) / layout.scale
-    monkeypatch.setattr(type(scene), "layout_at", lambda _self, _time: layout)
-    monkeypatch.setattr(type(scene), "camera_x_at", lambda _self, _time: world)
     monkeypatch.setattr("stavellum.rhi.RhiTarget", FakeTarget)
     with RasterFrameRenderer(scene) as assets, RhiFrameRenderer(scene, assets=assets) as renderer:
+        state = assets._evaluator.evaluate(5)
+        monkeypatch.setattr(assets._evaluator, "evaluate",
+                            lambda _time: replace(state, layout=layout, world_x=world))
         image, rect = assets._octave_overlays(part, layout, world)[0]
         assert image.format() == QImage.Format.Format_RGBA8888
         commands = renderer.commands(5)

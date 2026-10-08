@@ -4,10 +4,9 @@
 //! camera certificate stay in Python), serializes the resulting curves and
 //! notes into this crate, and then evaluates every rendered frame with a
 //! single FFI call: camera position, layout rows, zoom, activity envelopes
-//! and the tile plan header. The port is a faithful translation of
-//! `axis.py`, `camera.py`, `layout.py::sample/at`, `scene.py::
-//! activity_levels` and `render.py::_tile_plan/_raster_level`; golden-value
-//! tests in `tests/test_core_native.py` keep both implementations honest.
+//! and the tile plan header. Compilation algorithms stay in `axis.py`,
+//! `camera.py` and `layout.py`; independent test references verify the
+//! native frame evaluation against the former Python render path.
 
 use std::cell::RefCell;
 use std::ffi::{c_char, c_void, CString};
@@ -18,6 +17,54 @@ const TILE_PIXELS: f64 = 1024.0;
 const TILE_BLEED: f64 = 2.0;
 const ACTIVITY_ATTACK_SECONDS: f64 = 0.1;
 const ACTIVITY_RELEASE_SECONDS: f64 = 0.12;
+
+/// Sum finite integration pieces using a non-overlapping floating expansion.
+/// Keep discarded low bits until the final round-to-even, matching math.fsum.
+fn accurate_sum(values: impl IntoIterator<Item = f64>) -> f64 {
+    let mut expansion: Vec<f64> = Vec::new();
+    for mut value in values {
+        let mut used = 0;
+        for index in 0..expansion.len() {
+            let mut term = expansion[index];
+            if value.abs() < term.abs() {
+                std::mem::swap(&mut value, &mut term);
+            }
+            let rounded = value + term;
+            let error = term - (rounded - value);
+            if error != 0.0 {
+                expansion[used] = error;
+                used += 1;
+            }
+            value = rounded;
+        }
+        expansion.truncate(used);
+        if value != 0.0 {
+            expansion.push(value);
+        }
+    }
+    let mut result = expansion.pop().unwrap_or(0.0);
+    while let Some(term) = expansion.pop() {
+        let rounded = result + term;
+        let error = term - (rounded - result);
+        result = rounded;
+        if error != 0.0 {
+            // A remaining term with the same sign makes an apparent midpoint
+            // lie strictly beyond the halfway point in that direction.
+            if expansion
+                .last()
+                .is_some_and(|next| (*next > 0.0) == (error > 0.0))
+            {
+                let correction = 2.0 * error;
+                let adjusted = result + correction;
+                if adjusted - result == correction {
+                    result = adjusted;
+                }
+            }
+            break;
+        }
+    }
+    result
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -163,10 +210,12 @@ impl Track {
                 "Layout track keys must be sorted by time",
             )?;
         }
-        if !keys
-            .iter()
-            .all(|key| key.time.is_finite() && key.value.is_finite())
-        {
+        if !keys.iter().all(|key| {
+            key.time.is_finite()
+                && key.value.is_finite()
+                && key.velocity.is_finite()
+                && key.acceleration.is_finite()
+        }) {
             return Err("Layout track keys must be finite".to_owned());
         }
         Ok(Self { keys })
@@ -416,9 +465,7 @@ impl TimeAxis {
             pieces.push((right - start) * value);
             start = right;
         }
-        // Python accumulates with math.fsum; plain ordered summation stays
-        // within a few ulps for the handful of segments involved.
-        pieces.iter().sum()
+        accurate_sum(pieces)
     }
 
     pub fn integral(&self, start: f64, end: f64) -> f64 {
@@ -764,6 +811,59 @@ pub unsafe extern "C" fn spcore_compile(
     guarded(|| {
         require(axis_count >= 2, "时间轴需要至少两个对应的拍点和谱面位置。")?;
         require(part_count >= 1, "Layout requires at least one part")?;
+        require(
+            !beats.is_null()
+                && !xs.is_null()
+                && !zoom_keys.is_null()
+                && !tops_keys.is_null()
+                && !tops_counts.is_null()
+                && !opacity_keys.is_null()
+                && !opacity_counts.is_null()
+                && !part_dimensions.is_null()
+                && !note_counts.is_null()
+                && !consts.is_null(),
+            "Null core scene input",
+        )?;
+        require(
+            camera_bps.is_finite()
+                && camera_bps > 0.0
+                && camera_offset.is_finite()
+                && camera_window.is_finite()
+                && camera_window >= 0.0,
+            "Invalid core camera parameters",
+        )?;
+        let constants = &*consts;
+        let finite_constants = [
+            constants.indicator_right,
+            constants.indicator_source_width,
+            constants.indicator_source_height,
+            constants.icon_source_size,
+            constants.icon_source_gap,
+            constants.region_top,
+            constants.region_bottom,
+            constants.expanded_top,
+            constants.expanded_bottom,
+            constants.expansion_duration,
+            constants.tempo_padding,
+            constants.scene_scale,
+            constants.play_x,
+            constants.body_left,
+            constants.body_right,
+            constants.cache_limit,
+        ];
+        require(
+            finite_constants.iter().all(|value| value.is_finite())
+                && (constants.expansion_start.is_nan() || constants.expansion_start.is_finite())
+                && !constants.tempo_exit_time.is_nan(),
+            "Core layout constants must be finite",
+        )?;
+        require(
+            constants.scene_scale.is_finite()
+                && constants.scene_scale > 0.0
+                && constants.expansion_duration.is_finite()
+                && constants.expansion_duration > 0.0,
+            "Invalid core layout scale or duration",
+        )?;
         let beats = std::slice::from_raw_parts(beats, axis_count as usize).to_vec();
         let xs = std::slice::from_raw_parts(xs, axis_count as usize).to_vec();
         let axis = TimeAxis::new(beats, xs)?;
@@ -793,16 +893,27 @@ pub unsafe extern "C" fn spcore_compile(
             "Opacity key total does not match the per-part counts",
         )?;
         let dimensions = std::slice::from_raw_parts(part_dimensions, part_count * 2);
+        require(
+            dimensions.iter().all(|value| value.is_finite()),
+            "Core part dimensions must be finite",
+        )?;
         let tops_total = tops_total.max(0) as usize;
         let opacity_total = opacity_total.max(0) as usize;
         let all_tops = std::slice::from_raw_parts(tops_keys, tops_total);
         let all_opacities = std::slice::from_raw_parts(opacity_keys, opacity_total);
         let notes_total = total(note_counts);
+        require(notes_total == 0 || !notes.is_null(), "Null core notes")?;
         let all_notes = if notes_total > 0 {
             std::slice::from_raw_parts(notes, notes_total)
         } else {
             &[]
         };
+        require(
+            all_notes
+                .iter()
+                .all(|note| note.start.is_finite() && note.end.is_finite()),
+            "Core note times must be finite",
+        )?;
         let mut tops_offset = 0usize;
         let mut opacity_offset = 0usize;
         let mut notes_offset = 0usize;
@@ -848,13 +959,46 @@ pub unsafe extern "C" fn spcore_frame(
     guarded(|| {
         require(!handle.is_null(), "Null core handle")?;
         require(!out.is_null() && !rows.is_null(), "Null core output")?;
+        require(
+            presentation_time.is_finite() && audio_time.is_finite(),
+            "Core frame times must be finite",
+        )?;
         let scene = &*handle.cast::<CoreScene>();
         require(
             rows_capacity >= scene.parts.len() as i32,
             "Core row buffer is too small",
         )?;
         let row_slice = std::slice::from_raw_parts_mut(rows, scene.parts.len());
-        *out = scene.frame(presentation_time, audio_time, row_slice);
+        let frame = scene.frame(presentation_time, audio_time, row_slice);
+        require(
+            frame.scale.is_finite()
+                && frame.scale > 0.0
+                && frame.tile_raster_scale.is_finite()
+                && frame.tile_raster_scale > 0.0
+                && frame.world_x.is_finite()
+                && frame.camera_speed.is_finite()
+                && frame.tile_working_bytes.is_finite()
+                && frame.tile_first > i32::MIN
+                && frame.tile_last < i32::MAX,
+            "Core frame geometry is outside the supported finite range",
+        )?;
+        require(
+            row_slice.iter().all(|row| {
+                row.top.is_finite()
+                    && row.opacity.is_finite()
+                    && row.indicator_x.is_finite()
+                    && row.indicator_y.is_finite()
+                    && row.indicator_w.is_finite()
+                    && row.indicator_h.is_finite()
+                    && row.bounds_top.is_finite()
+                    && row.bounds_bottom.is_finite()
+                    && row.icon_size.is_finite()
+                    && row.activity_level.is_finite()
+                    && row.activity_attack.is_finite()
+            }),
+            "Core frame rows must be finite",
+        )?;
+        *out = frame;
         Ok(())
     })
 }
@@ -884,6 +1028,19 @@ pub extern "C" fn spcore_last_error() -> *const c_char {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn integration_sum_retains_low_bits_and_rounds_half_even() {
+        assert_eq!(accurate_sum([1e16, 1.0, -1e16]), 1.0);
+        let half_ulp = 2.0f64.powi(-53);
+        assert_eq!(accurate_sum([1.0, half_ulp]), 1.0);
+        assert_eq!(accurate_sum([1.0, half_ulp, 1e-30]), 1.0 + 2.0 * half_ulp);
+        assert_eq!(accurate_sum([1e-30, half_ulp, 1.0]), 1.0 + 2.0 * half_ulp);
+        assert_eq!(
+            accurate_sum([-1.0, -half_ulp, -1e-30]),
+            -1.0 - 2.0 * half_ulp
+        );
+    }
 
     fn key(time: f64, value: f64) -> CurveKey {
         CurveKey {

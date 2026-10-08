@@ -36,7 +36,7 @@ MODES = ("rhi-vulkan", "cpu")
 TILE_COUNTERS = ("tile_cache_hits", "tile_cache_misses", "tile_cache_evictions",
                  "svg_raster_seconds", "cache_peak_bytes", "cache_limit_bytes",
                  "visible_tile_working_peak_bytes")
-DELTA_COUNTERS = ("gpu_upload_bytes", "gpu_upload_seconds", "gpu_submit_seconds",
+DELTA_COUNTERS = ("scene_evaluation_count", "scene_evaluation_seconds", "scene_evaluation_cache_hits", "gpu_upload_bytes", "gpu_upload_seconds", "gpu_submit_seconds",
                   "synchronous_readback_seconds", "memory_copy_seconds",
                   "render_seconds", "asset_prepare_seconds", "command_build_seconds",
                   "command_pack_seconds", "native_begin_frame_seconds",

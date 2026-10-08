@@ -156,7 +156,7 @@ For more information, see [FLP / MIDI Import Guide](docs/importing.md).
 
 ## Development and Dependencies
 
-The Rust Vulkan compositor retains the native rendering ABI; the legacy Qt backend remains selectable. The Rust scene evaluation library includes Python bindings and parity tests, but is not yet called by the production rendering pipeline. See [Native build, backend selection and benchmarks](docs/rust-renderer.md).
+The Rust Vulkan compositor retains the native rendering ABI; the legacy Qt backend remains selectable. The required Rust scene evaluator supplies per-frame camera, layout and activity to both CPU and GPU rendering. A missing or incompatible core DLL fails rendering; graphics fallback still uses Rust scene computation. See [Native build, backend selection and benchmarks](docs/rust-renderer.md).
 
 ```powershell
 uv run python scripts/build_rust.py --install
@@ -165,7 +165,7 @@ uv run ruff check src tests scripts
 uv build --wheel
 ```
 
-The main pipeline is: import and `ProjectIR` → `PartMapping` → conservative recognition and score engraving with shared timing between music21 / Verovio → `CompiledScene` → RHI Vulkan / CPU offscreen compositing → FFmpeg NVENC / x264. Preview and export share `FrameRenderer`, and the horizontal tile cache and GPU texture cache each have capacity limits. The generated Windows x64 wheel includes the native DLL and shaders, so no compilation is needed after installation; rebuilding is required when first running from source or after updating native code. A standalone desktop installer is not yet available.
+The main pipeline is: import and `ProjectIR` → `PartMapping` → conservative recognition and score engraving with shared timing between music21 / Verovio → `CompiledScene` → Rust per-frame scene evaluation → RHI Vulkan / CPU offscreen compositing → FFmpeg NVENC / x264. Preview and export share `FrameRenderer`, and the horizontal tile cache and GPU texture cache each have capacity limits. The generated Windows x64 wheel includes the native DLL and shaders, so no compilation is needed after installation; rebuilding is required when first running from source or after updating native code. A standalone desktop installer is not yet available.
 
 ## License and Distribution
 

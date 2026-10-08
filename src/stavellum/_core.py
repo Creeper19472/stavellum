@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 import ctypes
+import math
 import os
+import weakref
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .scene import CompiledScene
+
+
+class CoreBackendError(RuntimeError):
+    """A scene evaluator failure; never a graphics fallback signal."""
+
+
+def _release(dll, handle):
+    dll.spcore_close(handle)
 
 
 class CurveKey(ctypes.Structure):
@@ -48,18 +58,35 @@ def library_path() -> Path:
     override = os.environ.get("STAVELLUM_CORE_DLL")
     if override:
         return Path(override).resolve()
-    package = Path(__file__).resolve().parent / "native/core/stavellum_core.dll"
-    if package.is_file():
-        return package
-    return Path(__file__).resolve().parents[2] / "target/release/stavellum_core.dll"
+    return Path(__file__).resolve().parent / "native/core/stavellum_core.dll"
 
 
 class CoreTarget:
     """Serialize a compiled scene once; evaluate frames with one FFI call."""
 
     def __init__(self, scene: CompiledScene, *, cache_limit: float | None = None):
-        self.scene = scene
-        dll = ctypes.CDLL(str(library_path()))
+        self._part_count = len(scene.parts)
+        self._handle = None
+        self.path = library_path()
+        try:
+            dll = ctypes.CDLL(str(self.path))
+            self._bind(dll)
+        except (OSError, AttributeError) as error:
+            raise CoreBackendError(
+                f"无法加载场景计算库 {self.path}；请运行 "
+                f"uv run python scripts/build_rust.py --install：{error}"
+            ) from error
+        self._dll = dll
+        if dll.spcore_abi_version() != 1:
+            raise CoreBackendError(
+                f"场景计算库 ABI 不匹配：{self.path}；请运行 "
+                "uv run python scripts/build_rust.py --install"
+            )
+        self._compile(scene, cache_limit)
+        self._finalizer = weakref.finalize(self, _release, dll, self._handle)
+
+    @staticmethod
+    def _bind(dll):
         pointer = ctypes.c_void_p
         for name, result, arguments in (
             ("spcore_abi_version", ctypes.c_uint32, ()),
@@ -77,11 +104,13 @@ class CoreTarget:
         ):
             function = getattr(dll, name)
             function.restype, function.argtypes = result, arguments
-        self._dll = dll
-        if self._dll.spcore_abi_version() != 1:
-            raise RuntimeError("Rust core library ABI mismatch; rebuild stavellum_core.dll")
+
+    def _compile(self, scene, cache_limit):
+        dll = self._dll
         layout = scene.layout
         camera = scene.camera
+        if layout is None or camera is None:
+            raise CoreBackendError("谱面尚未编译排版和相机时间轴。")
         parts = scene.parts
         # Track key order matches compile_layout's insertion order.
         tops_arrays = [self._keys(layout.tops[part.part_id]) for part in parts]
@@ -114,9 +143,6 @@ class CoreTarget:
             else cache_limit, owner)
         tops_flat = self._concatenate(tops_arrays, CurveKey)
         opacity_flat = self._concatenate(opacity_arrays, CurveKey)
-        self._keepalive = (beat_array, x_array, zoom_array, tops_flat, opacity_flat,
-                           note_storage, dimensions, counts(tops_arrays), counts(opacity_arrays),
-                           counts(note_arrays))
         self._handle = dll.spcore_compile(
             beat_array, x_array, len(scene.axis.beats),
             camera.beats_per_second, camera.score_offset, camera.half_window_seconds,
@@ -148,12 +174,16 @@ class CoreTarget:
 
     def _error(self):
         message = self._dll.spcore_last_error()
-        raise RuntimeError(message.decode("utf-8", errors="replace")
-                           if message else "Native core operation failed")
+        detail = message.decode("utf-8", errors="replace") if message else "Native core operation failed"
+        raise CoreBackendError(f"场景计算失败（{self.path}）：{detail}")
 
     def frame(self, presentation_time: float, audio_time: float):
         """Return (CoreFrame, CoreRow[part_count]) freshly read from native."""
-        rows = (CoreRow * len(self.scene.parts))()
+        if not self._handle:
+            raise CoreBackendError("场景计算器已经关闭。")
+        if not math.isfinite(presentation_time) or not math.isfinite(audio_time):
+            raise CoreBackendError("场景计算时间必须为有限数值。")
+        rows = (CoreRow * self._part_count)()
         frame = CoreFrame()
         if self._dll.spcore_frame(self._handle, presentation_time, audio_time,
                                   ctypes.byref(frame), rows, len(rows)):
@@ -165,6 +195,7 @@ class CoreTarget:
             if self._dll.spcore_close(self._handle):
                 self._error()
             self._handle = None
+            self._finalizer.detach()
 
     def __enter__(self):
         return self

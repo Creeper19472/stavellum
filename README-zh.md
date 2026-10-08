@@ -156,7 +156,7 @@ uv run stavellum parts "song.stproj" --output artifacts/parts
 
 ## 开发与依赖
 
-Rust Vulkan 合成器保持原生渲染 ABI 兼容，传统 Qt 后端仍可显式选择。Rust 场景计算库包含 Python 绑定和对照测试，目前尚未接入实际渲染流程。构建、后端选择与基准方法见 [原生渲染说明](docs/rust-renderer.md)。
+Rust Vulkan 合成器保持原生渲染 ABI 兼容，传统 Qt 后端仍可显式选择。Rust 场景计算库是运行必需依赖，CPU 与 GPU 渲染统一使用它计算每帧相机、布局及活动状态。DLL 缺失或 ABI 不兼容时明确报错；GPU 回退 CPU 后仍使用 Rust 场景计算。构建、后端选择与基准方法见 [原生渲染说明](docs/rust-renderer.md)。
 
 ```powershell
 uv run python scripts/build_rust.py --install
@@ -165,7 +165,7 @@ uv run ruff check src tests scripts
 uv build --wheel
 ```
 
-主要流程为：导入与 `ProjectIR` → `PartMapping` → 保守识别与 music21 / Verovio 共同时序刻谱 → `CompiledScene` → RHI Vulkan / CPU 离屏合成 → FFmpeg NVENC / x264。预览与导出共用 `FrameRenderer`，水平图块缓存与 GPU 纹理缓存分别有容量上限。生成的 Windows x64 wheel 包含原生 DLL 与 shader，无需在安装后编译；源码首次运行或更新原生代码后须重新构建。当前尚未提供独立桌面安装程序。
+主要流程为：导入与 `ProjectIR` → `PartMapping` → 保守识别与 music21 / Verovio 共同时序刻谱 → `CompiledScene` → Rust 场景逐帧求值 → RHI Vulkan / CPU 离屏合成 → FFmpeg NVENC / x264。预览与导出共用 `FrameRenderer`，水平图块缓存与 GPU 纹理缓存分别有容量上限。生成的 Windows x64 wheel 包含原生 DLL 与 shader，无需在安装后编译；源码首次运行或更新原生代码后须重新构建。当前尚未提供独立桌面安装程序。
 
 ## 开源协议与发布
 

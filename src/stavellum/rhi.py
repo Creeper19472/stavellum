@@ -97,8 +97,8 @@ class RhiFrameRenderer:
     def batch_plan(self, seconds):
         """Admit only frames whose entire visible tile set can stay resident."""
         self._check()
-        layout = self.scene.layout_at(seconds)
-        plan = self._assets._tile_plan(layout, self.scene.camera_x_at(seconds))
+        state = self._assets._evaluator.evaluate(seconds)
+        plan = self._assets._tile_plan(state)
         if plan.working_bytes > self._assets.cache_limit:
             return None
         return plan.level, plan.resident_keys
@@ -210,9 +210,9 @@ class RhiFrameRenderer:
                 quad.texture_id = self._target.texture(image)
                 commands.append(quad)
 
-        world_x = scene.camera_x_at(time)
-        layout = scene.layout_at(time)
-        plan = assets._tile_plan(layout, world_x)
+        state = assets._evaluator.evaluate(time)
+        world_x, layout = state.world_x, state.layout
+        plan = assets._tile_plan(state)
         assets.visible_tile_working_peak_bytes = max(assets.visible_tile_working_peak_bytes,
                                                     plan.working_bytes)
         scale = layout.scale
@@ -251,7 +251,7 @@ class RhiFrameRenderer:
                                 y, image.width() * header_ratio, image.height() * header_ratio), opacity)
                 rect = QRectF(*row.indicator_rect)
                 color = (None if time < s.intro_delay_seconds
-                         else activity_lamp_color(part, s.audio_time(time)))
+                         else activity_lamp_color(part, state.activity[part.part_id]))
                 if color is not None:
                     solid(rect.getRect(), color, opacity)
                 else:
@@ -335,7 +335,7 @@ class RhiFrameRenderer:
 
     def backend_report(self):
         native = self._last_report if self._closed else self._target.report()
-        return {**native, "requested_render_backend": "gpu", "render_backend": "gpu",
+        return {**native, **self._assets._evaluator.report(), "requested_render_backend": "gpu", "render_backend": "gpu",
                 "render_fallback_reasons": [], "render_seconds": self.render_seconds,
                 "rendered_frame_count": self.frame_count, "initialization_seconds": self.initialization_seconds,
                 "asset_prepare_seconds": self.asset_prepare_seconds, "command_build_seconds": self.command_build_seconds,
@@ -355,14 +355,18 @@ class RhiFrameRenderer:
         if self._closed:
             return
         self._check()
-        if self._stream is not None:
-            self._stream.close()
-        self._last_report = self._target.report()
-        self._target.close()
-        if self._owns_assets:
-            self._assets.close()
-        self._metadata = None
-        self._closed = True
+        try:
+            if self._stream is not None:
+                self._stream.close()
+            self._last_report = self._target.report()
+        finally:
+            try:
+                self._target.close()
+            finally:
+                if self._owns_assets:
+                    self._assets.close()
+                self._metadata = None
+                self._closed = True
 
     def __enter__(self):
         return self

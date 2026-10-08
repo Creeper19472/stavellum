@@ -9,6 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from native_frames import frame_layout
 from native_support import require_vulkan_device
 from PySide6.QtGui import QColor, QImage
 from test_render import colored_activity_document, rendered_document
@@ -156,7 +157,7 @@ def test_colored_lamp_commands_flash_and_fill_entire_rect_without_borders(veloci
     scene = compile_scene(colored_activity_document(velocity=velocity, intro_delay=2))
 
     def lamp_solids(commands, time, part_id):
-        x, y, width, height = scene.layout_at(time).rows[part_id].indicator_rect
+        x, y, width, height = frame_layout(scene, time).rows[part_id].indicator_rect
         return [quad for quad in commands
                 if quad.texture_id == 0
                 and x - 1e-4 <= quad.x and y - 1e-4 <= quad.y
@@ -185,7 +186,7 @@ def test_colored_lamp_commands_flash_and_fill_entire_rect_without_borders(veloci
                 assert len(quads) == 1
                 level = velocity / 127 * (.5 if time in (2.31, 2.81) else 1)
                 quad = quads[0]
-                row = scene.layout_at(time).rows["part"]
+                row = frame_layout(scene, time).rows["part"]
                 assert (quad.x, quad.y, quad.w, quad.h) == pytest.approx(row.indicator_rect)
                 opacity = row.opacity
                 assert quad.a == pytest.approx(level * opacity, abs=.5 / 255 + 2e-7)
@@ -195,7 +196,7 @@ def test_colored_lamp_commands_flash_and_fill_entire_rect_without_borders(veloci
                 solo = lamp_solids(commands, time, "solo")
                 assert len(solo) == 1
                 assert (solo[0].x, solo[0].y, solo[0].w, solo[0].h) == pytest.approx(
-                    scene.layout_at(time).rows["solo"].indicator_rect)
+                    frame_layout(scene, time).rows["solo"].indicator_rect)
                 assert solo[0].r > solo[0].b > solo[0].g
                 assert solo[0].a == pytest.approx(1)
                 independent[time] = solo[0]
@@ -212,6 +213,8 @@ def test_colored_lamp_commands_flash_and_fill_entire_rect_without_borders(veloci
 
 REAL_SCRIPT = r'''
 import json, os, sys, threading
+sys.path.insert(0, "tests")
+from native_frames import frame_layout
 from dataclasses import replace
 sys.path.insert(0, "tests")
 from test_render import colored_activity_document, lamp_interior, lamp_rectangle, rendered_document
@@ -298,7 +301,7 @@ for api in ("vulkan",):
             for time in samples:
                 frame=renderer.render_frame(time)
                 reference=cpu.render_frame(time)
-                for part_id,row in scene.layout_at(time).rows.items():
+                for part_id,row in frame_layout(scene, time).rows.items():
                     lit=time>=2 and (part_id=="solo" or time not in (2.371,2.9))
                     crop=lamp_rectangle if lit else lamp_interior
                     actual_image=crop(frame,row.indicator_rect)

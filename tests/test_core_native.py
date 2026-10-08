@@ -9,17 +9,14 @@ import sys
 from pathlib import Path
 
 import pytest
+from frame_reference import _tile_plan, activity_levels, layout_at
 
-from stavellum._core import CoreTarget, library_path
+from stavellum._core import CoreTarget
 from stavellum.render import RasterFrameRenderer
-from stavellum.scene import activity_levels, compile_scene
+from stavellum.scene import compile_scene
 
 sys.path.insert(0, "tests")
 from test_render import colored_activity_document, rendered_document  # noqa: E402
-
-
-def native_available() -> bool:
-    return library_path().is_file()
 
 
 def _compare_scene(scene, assets, core, settings, duration, extra_times=()):
@@ -37,9 +34,9 @@ def _compare_scene(scene, assets, core, settings, duration, extra_times=()):
     for time in times:
         audio = settings.audio_time(time)
         frame, rows = core.frame(time, audio)
-        layout = scene.layout_at(time)
+        layout = layout_at(scene.layout, time)
         world_x = scene.camera_x_at(time)
-        plan = assets._tile_plan(layout, world_x)
+        plan = _tile_plan(assets, layout, world_x)
         compare = {
             "world_x": (frame.world_x, world_x),
             # Native camera_speed is the raw CameraTimeline value; the
@@ -84,7 +81,6 @@ def _compare_scene(scene, assets, core, settings, duration, extra_times=()):
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(not native_available(), reason="Rust core DLL has not been built")
 def test_rust_core_matches_python_layout_camera_activity_and_tile_plan():
     scene = compile_scene(rendered_document(piano=True))
     assets = RasterFrameRenderer(scene)
@@ -99,7 +95,6 @@ def test_rust_core_matches_python_layout_camera_activity_and_tile_plan():
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(not native_available(), reason="Rust core DLL has not been built")
 def test_rust_core_matches_python_on_multi_part_expansion_and_hidden_rows():
     document = colored_activity_document(intro_delay=2)
     document.settings.announcement_auto_hide = True
@@ -122,7 +117,6 @@ def test_rust_core_matches_python_on_multi_part_expansion_and_hidden_rows():
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(not native_available(), reason="Rust core DLL has not been built")
 def test_rust_core_rejects_short_axis_without_crashing():
     script = r'''
 import ctypes, json
@@ -143,6 +137,8 @@ zero = (ctypes.c_int64 * 1)(0)
 empty_notes = (Note * 0)()
 dims = (ctypes.c_double * 2)(1.0, 0.5)
 consts = LayoutConsts()
+consts.scene_scale = 1.0
+consts.expansion_duration = 1.0
 consts.expansion_start = float("nan")
 consts.tempo_owner = -1
 consts.cache_limit = 1.0
@@ -162,7 +158,6 @@ print(json.dumps({"handle": bool(handle), "error": error}))
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(not native_available(), reason="Rust core DLL has not been built")
 def test_rust_core_rejects_inconsistent_declared_totals():
     script = r'''
 import ctypes, json
@@ -184,6 +179,8 @@ counts = (ctypes.c_int64 * 1)(1)
 empty_notes = (Note * 0)()
 dims = (ctypes.c_double * 2)(1.0, 0.5)
 consts = LayoutConsts()
+consts.scene_scale = 1.0
+consts.expansion_duration = 1.0
 consts.expansion_start = float("nan")
 consts.tempo_owner = -1
 consts.cache_limit = 1.0

@@ -5,6 +5,14 @@ import os
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def native_frame_ownership():
+    from native_frames import close_evaluators
+
+    yield
+    close_evaluators()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def session_compilation_cache_directory(tmp_path_factory):
     # Module-scoped scenes are created before function-scoped fixtures run.

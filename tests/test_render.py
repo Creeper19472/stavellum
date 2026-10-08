@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import replace
 
 import pytest
+from native_frames import frame_layout
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtSvg import QSvgRenderer
@@ -188,7 +189,7 @@ def assert_uniform_lamp_rgb(frame: QImage, rectangle, expected):
 
 def lamp_rgb(renderer, scene, time, part_id="part"):
     frame = renderer.render_frame(time)
-    rectangle = scene.layout_at(time).rows[part_id].indicator_rect
+    rectangle = frame_layout(scene, time).rows[part_id].indicator_rect
     x, y, width, height = rectangle
     rgb = frame.pixelColor(math.floor(x + width / 2), math.floor(y + height / 2)).getRgb()[:3]
     assert_uniform_lamp_rgb(frame, rectangle, rgb)
@@ -251,7 +252,7 @@ def test_double_staff_renders_both_staff_bands_as_one_part():
     frame = FrameRenderer(scene).render_frame(0)
     assert len(scene.parts) == 1
     part = scene.parts[0]
-    layout = scene.layout_at(0)
+    layout = frame_layout(scene, 0)
     assert len(part.staff_centers) == 2
     for center in part.staff_centers:
         y = round(layout.rows[part.part_id].top + (center - part.source_top) * layout.scale)
@@ -292,7 +293,7 @@ def test_extreme_ledger_lines_remain_visible_after_individual_part_cropping():
     full_svg = QSvgRenderer(scene.svg.encode("utf-8"))
     frame = renderer.render_frame(0)
     parts = {part.part_id: part for part in scene.parts}
-    layout = scene.layout_at(0)
+    layout = frame_layout(scene, 0)
     row_positions = {identity: row.top for identity, row in layout.rows.items()}
     samples = []
     for element, owner in owned_elements(scene):
@@ -357,14 +358,14 @@ def test_activity_indicator_lights_the_whole_interior_at_weak_velocity():
     document.project.notes = [NoteEvent("weak", "track", 0, 120, 72, 40)]
     scene = compile_scene(document)
     renderer = FrameRenderer(scene)
-    rectangle = scene.layout_at(0).rows["part"].indicator_rect
+    rectangle = frame_layout(scene, 0).rows["part"].indicator_rect
     active = lamp_interior(renderer.render_frame(0), rectangle)
     levels = list(pixels(active)[0::4])
     assert max(levels) - min(levels) <= 1
     assert min(levels) == pytest.approx(255 * 40 / 127, abs=1)
     held = lamp_rgb(renderer, scene, .11)
     assert held == pytest.approx((209 * 40 / 127,) * 3, abs=1)
-    rectangle = scene.layout_at(0.5).rows["part"].indicator_rect
+    rectangle = frame_layout(scene, 0.5).rows["part"].indicator_rect
     resting = lamp_interior(renderer.render_frame(0.5), rectangle)
     assert max(pixels(resting)[0::4]) == 0
     outlined = renderer.render_frame(0.5).copy(QRectF(*rectangle).toAlignedRect())
@@ -393,7 +394,7 @@ def test_colored_activity_uses_regular_source_across_techniques_flash_hold_and_r
         assert solo_held != held
         for time in (0, .125, .25, .5, .625, .75, .31, .81):
             frame = renderer.render_frame(time)
-            rectangle = scene.layout_at(time).rows["part"].indicator_rect
+            rectangle = frame_layout(scene, time).rows["part"].indicator_rect
             assert_uniform_rgb(lamp_rectangle(frame, rectangle), lamp_rgb(renderer, scene, time))
         for time in (.25, .75):
             assert lamp_rgb(renderer, scene, time) == pytest.approx(held, abs=1)
@@ -404,10 +405,10 @@ def test_colored_activity_uses_regular_source_across_techniques_flash_hold_and_r
                 tuple(value / 2 for value in held), abs=1)
         for time in (.371, .4, .871, .9):
             frame = renderer.render_frame(time)
-            assert_uniform_lamp_rgb(frame, scene.layout_at(time).rows["part"].indicator_rect,
+            assert_uniform_lamp_rgb(frame, frame_layout(scene, time).rows["part"].indicator_rect,
                                     (0, 0, 0))
         quiet = renderer.render_frame(.4)
-        rectangle = scene.layout_at(.4).rows["part"].indicator_rect
+        rectangle = frame_layout(scene, .4).rows["part"].indicator_rect
         outlined = quiet.copy(QRectF(*rectangle).toAlignedRect())
         assert max(pixels(outlined)[0::4]) > 100
 
@@ -429,9 +430,9 @@ def test_typical_fl_channel_colors_are_brighter_while_held_and_flash_for_100ms(s
             assert QColor(*rgb).hueF() == pytest.approx(QColor(source).hueF(), abs=.015)
         for time, rgb in ((0, onset), (.05, middle), (.1, held), (.9, held)):
             frame = renderer.render_frame(time)
-            assert_uniform_rgb(lamp_rectangle(frame, scene.layout_at(time).rows["part"].indicator_rect), rgb)
+            assert_uniform_rgb(lamp_rectangle(frame, frame_layout(scene, time).rows["part"].indicator_rect), rgb)
         quiet = renderer.render_frame(1.121)
-        rectangle = scene.layout_at(1.121).rows["part"].indicator_rect
+        rectangle = frame_layout(scene, 1.121).rows["part"].indicator_rect
         assert_uniform_lamp_rgb(quiet, rectangle, (0, 0, 0))
         assert max(pixels(lamp_rectangle(quiet, rectangle))[0::4]) > 150
 
@@ -466,10 +467,10 @@ def test_short_notes_flash_then_release_and_restore_outline_after_120ms():
         brightness = [max(lamp_rgb(renderer, scene, time)) for time in (0, .025, .05, .11)]
         assert all(first > second > 0 for first, second in zip(brightness, brightness[1:]))
         tail = renderer.render_frame(.11)
-        rectangle = scene.layout_at(.11).rows["part"].indicator_rect
+        rectangle = frame_layout(scene, .11).rows["part"].indicator_rect
         assert_uniform_rgb(lamp_rectangle(tail, rectangle), lamp_rgb(renderer, scene, .11))
         quiet = renderer.render_frame(.171)
-        rectangle = scene.layout_at(.171).rows["part"].indicator_rect
+        rectangle = frame_layout(scene, .171).rows["part"].indicator_rect
         assert_uniform_lamp_rgb(quiet, rectangle, (0, 0, 0))
         assert max(pixels(lamp_rectangle(quiet, rectangle))[0::4]) > 150
 
@@ -481,7 +482,7 @@ def test_colored_activity_is_dark_during_intro_and_random_seeks_preserve_pixels(
         expected = {time: pixels(sequential.render_frame(time)) for time in times}
         for time in (0, 1, 1.999):
             frame = sequential.render_frame(time)
-            for row in scene.layout_at(time).rows.values():
+            for row in frame_layout(scene, time).rows.values():
                 assert_uniform_lamp_rgb(frame, row.indicator_rect, (0, 0, 0))
         assert max(lamp_rgb(sequential, scene, 2)) > max(lamp_rgb(sequential, scene, 2.1)) > 0
     with FrameRenderer(scene) as random_access:
@@ -497,7 +498,7 @@ def test_colored_flashes_follow_audio_offset_without_replaying_elapsed_onsets(of
     shifted = compile_scene(document)
     with FrameRenderer(baseline) as reference, FrameRenderer(shifted) as renderer:
         for time in (0, 1.999):
-            for row in shifted.layout_at(time).rows.values():
+            for row in frame_layout(shifted, time).rows.values():
                 assert_uniform_lamp_rgb(renderer.render_frame(time), row.indicator_rect, (0, 0, 0))
         for audio_time in (0, .05, .125, .25, .375, .5, .75, .9, 1.1):
             for part_id in ("part", "solo"):
@@ -539,7 +540,7 @@ def test_indicator_sizes_match_across_staves_and_grow_with_changing_layout():
     sizes = set()
     scales = set()
     for seconds in (0, 1, 3, 4, 8, 12, 14, 16, 18, 24):
-        layout = scene.layout_at(seconds)
+        layout = frame_layout(scene, seconds)
         scales.add(round(layout.scale, 8))
         for row in layout.rows.values():
             x, y, width, height = row.indicator_rect
@@ -566,7 +567,7 @@ def test_zooming_random_access_frames_and_cache_remain_deterministic():
     for seconds in reversed(times):
         assert pixels(random_access.render_frame(seconds)) == expected[seconds]
         assert random_access.cache_bytes <= random_access.cache_limit
-    assert len({scene.layout_at(seconds).scale for seconds in times}) > 1
+    assert len({frame_layout(scene, seconds).scale for seconds in times}) > 1
 
 
 def test_small_output_single_indicator_is_large_enough_to_show_activity():
@@ -574,11 +575,11 @@ def test_small_output_single_indicator_is_large_enough_to_show_activity():
     document.settings.width, document.settings.height = 320, 240
     document.project.notes = [NoteEvent("bright", "track", 0, 120, 72, 127)]
     scene = compile_scene(document)
-    rectangle = scene.layout_at(0).rows["part"].indicator_rect
+    rectangle = frame_layout(scene, 0).rows["part"].indicator_rect
     assert rectangle[2] >= 5 and rectangle[3] >= 20
     renderer = FrameRenderer(scene)
     active = lamp_interior(renderer.render_frame(0), rectangle)
-    quiet = lamp_interior(renderer.render_frame(0.5), scene.layout_at(0.5).rows["part"].indicator_rect)
+    quiet = lamp_interior(renderer.render_frame(0.5), frame_layout(scene, 0.5).rows["part"].indicator_rect)
     assert min(pixels(active)[0::4]) == 255
     assert max(pixels(quiet)[0::4]) == 0
 
@@ -590,14 +591,14 @@ def test_opening_pause_freezes_score_and_keeps_first_note_dark():
     renderer = FrameRenderer(scene)
 
     def score(frame):
-        top = math.ceil(scene.layout_at(0).rows["part"].top)
+        top = math.ceil(frame_layout(scene, 0).rows["part"].top)
         return pixels(frame.copy(0, top, document.settings.width,
                                  math.floor(scene.settings.score_bottom * document.settings.height) - top))
 
     first = renderer.render_frame(0)
     assert score(first) == score(renderer.render_frame(1.125))
     assert score(first) == score(renderer.render_frame(2.124))
-    rectangle = scene.layout_at(0).rows["part"].indicator_rect
+    rectangle = frame_layout(scene, 0).rows["part"].indicator_rect
     assert max(pixels(lamp_interior(first, rectangle))[0::4]) == 0
     started = renderer.render_frame(2.125)
     assert max(pixels(lamp_interior(started, rectangle))[0::4]) > 100
@@ -643,8 +644,8 @@ def test_hidden_announcement_reclaims_space_during_intro_and_random_seeks_match(
     scene = compile_scene(document)
     renderer = FrameRenderer(scene)
     hide_end = 2.3
-    initial = scene.layout_at(hide_end)
-    enlarged = scene.layout_at(4)
+    initial = frame_layout(scene, hide_end)
+    enlarged = frame_layout(scene, 4)
     assert initial.region_bounds[1] == pytest.approx(0.42 * scene.settings.height)
     assert enlarged.region_bounds[1] == pytest.approx(0.95 * scene.settings.height)
     assert enlarged.scale > initial.scale
@@ -690,7 +691,7 @@ def test_tempo_appears_at_first_beat_then_scrolls_out_without_timed_fades(bpm, m
         frame = QImage(scene.settings.width, scene.settings.height, QImage.Format.Format_RGBA8888)
         frame.fill(Qt.GlobalColor.transparent)
         painter = QPainter(frame)
-        renderer._draw_tempo(painter, time, scene.layout_at(time))
+        renderer._draw_tempo(painter, time, frame_layout(scene, time), scene.camera_x_at(time))
         painter.end()
         return pixels(frame)
 
@@ -702,7 +703,7 @@ def test_tempo_appears_at_first_beat_then_scrolls_out_without_timed_fades(bpm, m
     assert math.isfinite(exit_time) and exit_time > 2
     for time in (0, 2, (2 + exit_time) / 2):
         assert max(tempo(time)[3::4]) > 0
-        layout = scene.layout_at(time)
+        layout = frame_layout(scene, time)
         assert labels[-1][1] == 270
         assert labels[-1][3] == pytest.approx(layout.scale)
         assert labels[-1][4] == pytest.approx(scene.play_x + (scene.axis.x_at(0) - scene.camera_x_at(time)) * layout.scale)
@@ -729,7 +730,7 @@ def test_staff_extensions_turn_gray_only_right_of_real_terminal_bar(piano, offse
         low, high = scene.settings.intro_delay_seconds, scene.score_duration + abs(offset) + 20
         for _ in range(60):
             middle = (low + high) / 2
-            displayed = scene.play_x + (scene.terminal_x - scene.camera_x_at(middle)) * scene.layout_at(middle).scale
+            displayed = scene.play_x + (scene.terminal_x - scene.camera_x_at(middle)) * frame_layout(scene, middle).scale
             if displayed > terminal_position:
                 low = middle
             else:
@@ -737,8 +738,8 @@ def test_staff_extensions_turn_gray_only_right_of_real_terminal_bar(piano, offse
         time = (low + high) / 2
         frame = renderer.render_frame(time)
         part = scene.parts[0]
-        row = scene.layout_at(time).rows[part.part_id]
-        scale = scene.layout_at(time).scale
+        row = frame_layout(scene, time).rows[part.part_id]
+        scale = frame_layout(scene, time).scale
         for center in part.staff_centers:
             y = round(row.top + (center - part.source_top) * scale)
             for x in (round(scene.body_left + 8), round(scene.body_right - 8)):
