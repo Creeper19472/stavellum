@@ -671,6 +671,10 @@ def test_tempo_appears_at_first_beat_then_scrolls_out_without_timed_fades(bpm, m
     document.settings.overlay_enter_seconds = 10
     document.settings.overlay_exit_seconds = 10
     scene = compile_scene(document)
+    # The painter-internals assertions below are defined by the CPU raster;
+    # pin it so an installed native backend cannot change what is captured.
+    document.settings.render_backend = "cpu"
+    scene = replace(scene, settings=replace(scene.settings, render_backend="cpu"))
     renderer = FrameRenderer(scene)
     labels = []
     original = render_module.draw_text_rect

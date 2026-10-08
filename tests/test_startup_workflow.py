@@ -409,8 +409,7 @@ def test_closing_during_import_stops_worker_and_ignores_late_results(
 
 def test_demo_from_welcome_enters_editor_after_success(make_window, source, app):
     window = make_window()
-    window.welcome.categories.setCurrentRow(1)
-    window.welcome.selected_button.click()
+    window.welcome.demo_button.click()
     assert window._job.operation == "demo"
     assert window.welcome.isVisible() and not window.isVisible()
     window._job.complete(existing_document(source))

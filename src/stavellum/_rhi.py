@@ -1,4 +1,4 @@
-"""Explicit ctypes ABI for the QRhi Vulkan compositor."""
+"""ctypes ABI for the Rust Vulkan compositor and historical QRhi library."""
 
 from __future__ import annotations
 
@@ -39,6 +39,12 @@ def library_path() -> Path:
     override = os.environ.get("STAVELLUM_RHI_DLL")
     if override:
         return Path(override).resolve()
+    root = Path(__file__).resolve()
+    # Installed Rust builds are preferred. A development build is selected only
+    # explicitly, so incomplete or stale Cargo outputs cannot change production.
+    rust_library = root.parent / "native/rhi/stavellum_rust.dll"
+    if rust_library.is_file():
+        return rust_library
     package = Path(__file__).resolve().parent / "native/rhi/stavellum_rhi.dll"
     if package.is_file():
         return package
@@ -51,8 +57,12 @@ class RhiTarget:
     def __init__(self, width: int, height: int, cache_megabytes: int, api: str):
         if api != "vulkan":
             raise ValueError("RHI API must be vulkan")
-        if sys.platform != "win32" or PySide6.__version__ != "6.11.2":
-            raise GpuBackendError("Vulkan 渲染需要 Windows x64 和 PySide6 6.11.2。")
+        if sys.platform != "win32":
+            raise GpuBackendError("Vulkan 渲染需要 Windows x64。")
+        # Only the legacy Qt RHI DLL shares PySide6's private ABI; the Rust
+        # backend pins nothing beyond a working Vulkan loader.
+        if library_path().name == "stavellum_rhi.dll" and PySide6.__version__ != "6.11.2":
+            raise GpuBackendError("传统 Qt 渲染后端要求 PySide6 6.11.2。")
         self._thread = threading.get_ident()
         self.width, self.height = width, height
         self.budget = cache_megabytes * 1024 * 1024
@@ -80,7 +90,7 @@ class RhiTarget:
                 self._error()
         except OSError as error:
             self._directory.close()
-            raise GpuBackendError("无法加载 Vulkan 渲染库；请运行 scripts/build_rhi.py --install："
+            raise GpuBackendError("无法加载 Vulkan 渲染库；请运行 scripts/build_rust.py --install："
                                   + str(error)) from error
         except BaseException:
             self._directory.close()

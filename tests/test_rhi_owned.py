@@ -11,6 +11,7 @@ import weakref
 from pathlib import Path
 
 import pytest
+from native_support import require_vulkan_device
 from PySide6.QtGui import QImage
 
 from stavellum import _rhi
@@ -243,6 +244,7 @@ from dataclasses import replace
 from pathlib import Path
 sys.path.insert(0, "tests")
 from test_export_pipeline import Process
+from native_support import require_vulkan_device
 from test_render import rendered_document
 from stavellum import export
 from stavellum.models import RenderSettings
@@ -339,6 +341,7 @@ print(json.dumps({"api": api, "rejected": len(cases), "frames": len(cases)}), fl
 
 
 def run_native(script: str, api: str):
+    require_vulkan_device()
     root = Path(__file__).resolve().parents[1]
     dll = _rhi.library_path()
     if not dll.exists():

@@ -147,6 +147,8 @@ def install_resources(library: Path, destination: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--backend", choices=("rust", "qt"), default="qt",
+                        help="Select rust for the new compositor; qt retains the verified backend")
     parser.add_argument("--prepare", action="store_true")
     parser.add_argument("--sdk", type=Path, default=CACHE / "sdk")
     parser.add_argument("--install", action="store_true",
@@ -154,6 +156,10 @@ def main() -> None:
     parser.add_argument("--install-dir", type=Path, default=ROOT / "src/stavellum/native/rhi",
                         help="Package resource destination used with --install")
     args = parser.parse_args()
+    if args.backend == "rust":
+        from build_rust import build as build_rust
+        print(build_rust(install=args.install, destination=args.install_dir))
+        return
     sdk = prepare() if args.prepare else args.sdk
     library = build(sdk)
     if args.install:

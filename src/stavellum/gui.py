@@ -10,8 +10,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QSettings, QSignalBlocker, Qt, QTimer, QUrl
-from PySide6.QtGui import QAction, QCloseEvent, QImage, QPainter, QPalette, QPixmap
+from PySide6.QtCore import QSettings, QSignalBlocker, QSize, Qt, QTimer, QUrl
+from PySide6.QtGui import QAction, QCloseEvent, QColor, QImage, QPainter, QPalette, QPixmap
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QTabWidget,
     QTextBrowser,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -57,6 +58,7 @@ from .models import (
 from .new_project import NewProjectOptions, ProjectWizard
 from .progress import ExportProgress
 from .progress_dialog import ExportProgressDialog
+from .theme import apply_desktop_theme, desktop_icon
 from .welcome import RecentProjects, WelcomePage
 
 
@@ -86,6 +88,25 @@ def _section(layout: QVBoxLayout, title: str) -> QFormLayout:
     return form
 
 
+def _icon_button(icon: str, text: str, action: QAction | None = None) -> QToolButton:
+    button = QToolButton()
+    if action is not None:
+        action.setIcon(desktop_icon(icon))
+        button.setDefaultAction(action)
+    else:
+        button.setText(text)
+    button.setIcon(desktop_icon(icon))
+    button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+    button.setObjectName("IconButton")
+    button.setFixedSize(32, 32)
+    button.setIconSize(QSize(18, 18))
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    shortcut = action.shortcut().toString() if action is not None else ""
+    button.setToolTip(f"{text} ({shortcut})" if shortcut else text)
+    button.setAccessibleName(text)
+    return button
+
+
 class PreviewCanvas(QWidget):
     """Scale a rendered frame for display without changing the export dimensions."""
 
@@ -104,10 +125,11 @@ class PreviewCanvas(QWidget):
 
     def paintEvent(self, event: Any) -> None:
         painter = QPainter(self)
-        painter.fillRect(self.rect(), Qt.GlobalColor.black)
+        painter.fillRect(self.rect(), QColor("#0b1017"))
         if self.frame.isNull():
-            painter.setPen(Qt.GlobalColor.gray)
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "打开工程或示例，生成五线谱预览")
+            painter.setPen(QColor("#a4b2c3"))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
+                             "你的谱面将在这里呈现\n导入音乐来源，再点击“更新预览”")
             return
         size = self.frame.size().scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio)
         x, y = (self.width() - size.width()) // 2, (self.height() - size.height()) // 2
@@ -119,6 +141,8 @@ class PreviewCanvas(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self, project_path: str | None = None, *, settings: QSettings | None = None) -> None:
         super().__init__()
+        self.setObjectName("MainWindow")
+        apply_desktop_theme(self)
         self.document: ProjectDocument | None = None
         self.project_path = ""
         self.renderer: Any = None
@@ -214,6 +238,8 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         central = QWidget()
         outer = QVBoxLayout(central)
+        outer.setContentsMargins(18, 12, 18, 8)
+        outer.setSpacing(14)
         self.welcome = WelcomePage()
         self.welcome.close_requested.connect(self.close)
         self.welcome.cancel_task_requested.connect(self._cancel_job)
@@ -229,38 +255,61 @@ class MainWindow(QMainWindow):
         self.wizard.cancel_requested.connect(self._cancel_wizard)
         self.editor = QWidget()
         editor_layout = QVBoxLayout(self.editor)
-        self.compile_button = QPushButton("更新预览")
+        editor_layout.setContentsMargins(0, 0, 0, 0)
+        editor_layout.setSpacing(16)
+        self.compile_button = _icon_button("refresh", "更新预览")
         self.compile_button.clicked.connect(self.compile_preview)
         splitter = QSplitter()
         self.tabs = QTabWidget()
         self.tabs.setMinimumWidth(420)
+        self.tabs.setDocumentMode(True)
+        self.tabs.tabBar().setDrawBase(False)
         self.tabs.addTab(self._source_tab(), "来源与时间")
         self.tabs.addTab(self._parts_tab(), "分谱与乐器")
         self.tabs.addTab(self._settings_tab(), "画面与文字")
         right = QWidget()
         right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(16, 0, 0, 0)
+        right_layout.setSpacing(12)
         preview_actions = QHBoxLayout()
-        preview_actions.addWidget(QLabel("谱面预览"))
+        preview_actions.setSpacing(4)
+        preview_title = QLabel("谱面预览")
+        preview_title.setObjectName("PanelTitle")
+        preview_actions.addWidget(preview_title)
         preview_actions.addStretch(1)
+        for icon, action in (("new", self.new_action), ("open", self.open_action),
+                             ("save", self.save_action), ("export", self.export_video_action)):
+            preview_actions.addWidget(_icon_button(icon, action.text(), action))
+        preview_actions.addSpacing(8)
         preview_actions.addWidget(self.compile_button)
         right_layout.addLayout(preview_actions)
         self.preview = PreviewCanvas()
         right_layout.addWidget(self.preview, 1)
         self.preview_status = QLabel("尚未生成谱面")
+        self.preview_status.setObjectName("Muted")
+        self.preview_status.setWordWrap(True)
         right_layout.addWidget(self.preview_status)
-        transport = QHBoxLayout()
-        self.play_button = QPushButton("播放")
+        transport_bar = QWidget()
+        transport_bar.setObjectName("TransportBar")
+        transport = QHBoxLayout(transport_bar)
+        transport.setContentsMargins(12, 10, 12, 10)
+        transport.setSpacing(14)
+        self.play_button = _icon_button("play", "播放")
         self.play_button.clicked.connect(self.toggle_playback)
         self.seek = QSlider(Qt.Orientation.Horizontal)
         self.seek.setRange(0, 0)
-        self.seek.sliderMoved.connect(self.seek_to_milliseconds)
+        self.seek.setAccessibleName("预览时间轴")
+        self.seek.setSingleStep(100)
+        self.seek.setPageStep(1000)
+        self.seek.valueChanged.connect(self.seek_to_milliseconds)
         self.seek.sliderPressed.connect(self._pause_for_seek)
         self.seek.sliderReleased.connect(lambda: self.seek_to_milliseconds(self.seek.value()))
         self.time_label = QLabel("00:00.00 / 00:00.00")
+        self.time_label.setObjectName("Muted")
         transport.addWidget(self.play_button)
         transport.addWidget(self.seek, 1)
         transport.addWidget(self.time_label)
-        right_layout.addLayout(transport)
+        right_layout.addWidget(transport_bar)
         splitter.addWidget(self.tabs)
         splitter.addWidget(right)
         splitter.setSizes([470, 1000])
@@ -287,6 +336,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         widget = QWidget()
+        widget.setObjectName("SettingsContent")
         layout = QVBoxLayout(widget)
         source_form = _section(layout, "来源文件与 Arrangement")
         self.source_label = QLabel("尚未打开来源")
@@ -340,6 +390,7 @@ class MainWindow(QMainWindow):
 
     def _parts_tab(self) -> QWidget:
         outer = QWidget()
+        outer.setObjectName("SettingsContent")
         layout = QVBoxLayout(outer)
         self.parts = QListWidget()
         self.parts.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -360,6 +411,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         editor = QWidget()
+        editor.setObjectName("SettingsContent")
         editor_layout = QVBoxLayout(editor)
         part_form = _section(editor_layout, "分谱名称与来源轨道")
         icon_form = _section(editor_layout, "乐器与图标")
@@ -391,7 +443,7 @@ class MainWindow(QMainWindow):
         self.icon_preview = QLabel()
         self.icon_preview.setFixedSize(48, 48)
         self.icon_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.icon_preview.setStyleSheet("background: #171717; color: white;")
+        self.icon_preview.setStyleSheet("background: #121a24; border: 1px solid #303d4d; border-radius: 8px;")
         icon_row.addWidget(self.icon_preview)
         icon_row.addWidget(self.icon, 1)
         self.icon_name = QLabel()
@@ -500,6 +552,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         widget = QWidget()
+        widget.setObjectName("SettingsContent")
         layout = QVBoxLayout(widget)
         metadata_form = _section(layout, "曲目信息")
         frame_form = _section(layout, "画面尺寸与谱区布局")
@@ -902,7 +955,7 @@ class MainWindow(QMainWindow):
                                        icon_assets=copy.deepcopy(old.icon_assets))
         else:
             document = ProjectDocument(project, suggested, metadata=Metadata(title=project.name))
-        self.set_document(document)
+        self.set_document(document, self.project_path if old else "")
         self._dirty = True
         self._update_title()
 
@@ -1493,10 +1546,7 @@ class MainWindow(QMainWindow):
             if self._job and self._job.operation not in {"video", "parts"}:
                 self._set_job_message("任务完成")
         except Exception as exc:
-            if self._wizard_importing:
-                self._job_error(f"读取后台结果失败：{exc}", str(exc))
-            else:
-                self._show_error(f"读取后台结果失败：{exc}")
+            self._job_error(f"读取后台结果失败：{exc}", str(exc))
 
     def _job_progress(self, fraction: float, message: str) -> None:
         if self._job and self._job.operation in {"video", "parts"}:
@@ -1616,9 +1666,11 @@ class MainWindow(QMainWindow):
 
     def _update_transport(self, *args: Any) -> None:
         duration = self._duration()
+        blocker = QSignalBlocker(self.seek)
         self.seek.setRange(0, math.ceil(duration * 1000))
         if not self.seek.isSliderDown():
             self.seek.setValue(round(self._position * 1000))
+        del blocker
         self.time_label.setText(f"{_seconds_label(self._position)} / {_seconds_label(duration)}")
 
     def toggle_playback(self) -> None:
@@ -1633,6 +1685,9 @@ class MainWindow(QMainWindow):
         self._anchor_playback_clock(self._position)
         self._synchronize_audio()
         self.play_button.setText("暂停")
+        self.play_button.setIcon(desktop_icon("pause"))
+        self.play_button.setToolTip("暂停")
+        self.play_button.setAccessibleName("暂停")
         self.timer.setInterval(max(1, round(1000 / self._preview_settings().fps)))
         self.timer.start()
 
@@ -1648,6 +1703,9 @@ class MainWindow(QMainWindow):
         self.timer.stop()
         if hasattr(self, "play_button"):
             self.play_button.setText("播放")
+            self.play_button.setIcon(desktop_icon("play"))
+            self.play_button.setToolTip("播放")
+            self.play_button.setAccessibleName("播放")
 
     def _pause_for_seek(self) -> None:
         self.pause_playback()
@@ -1851,11 +1909,38 @@ class MainWindow(QMainWindow):
 
 def run_gui(project_path: str | None = None) -> int:
     from .qt import prepare_render_app
+    from .startup import StartupSplash
 
     app = prepare_render_app(RenderSettings())
     app.setApplicationName("Stavellum")
     app.setWindowIcon(application_icon())
     app.setOrganizationName("Stavellum")
-    window = MainWindow(project_path)
-    window._show_welcome()
+    splash = StartupSplash()
+    window = None
+
+    def reveal_workspace() -> None:
+        if window is None or splash.cancelled:
+            return
+        window._show_welcome()
+        splash.deleteLater()
+        if project_path:
+            window.open_path(project_path)
+
+    def cancel_startup() -> None:
+        if window is not None:
+            window.close()
+        app.quit()
+
+    def initialize_workspace() -> None:
+        nonlocal window
+        if splash.cancelled:
+            return
+        # Delay opening a requested project until its window owns navigation.
+        window = MainWindow()
+        splash.mark_ready()
+
+    splash.finished.connect(reveal_workspace)
+    splash.close_requested.connect(cancel_startup)
+    splash.show()
+    QTimer.singleShot(0, initialize_workspace)
     return app.exec()

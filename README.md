@@ -11,18 +11,21 @@ Convert FL Studio projects or MIDI into staff notation and scroll it on screen t
 
 The program renders frame by frame instead of capturing the screen. The default output is 1920×1080, 60 fps, H.264 + AAC, with **RHI Vulkan** frame compositing and NVIDIA NVENC encoding preferred, automatically falling back to the CPU when the hardware is unavailable.
 
+> [!NOTE]
+> This project is 99% vibe-coded. Use at your own risk!
+
 ## Installation and Launch
 
 For the best performance, your device should have at least **a graphics card and driver supporting Vulkan and 4×MSAA**.
 
-The program currently runs only on Windows x64 and requires Python **3.14**, [uv](https://docs.astral.sh/uv/), and FFmpeg with the `libx264` encoder. Running from source also requires the Visual Studio C++ development tools to build the native RHI backend; the build script can download the Qt development SDK into the project cache. PySide6 is pinned to **6.11.2** to match the Qt private ABI used by the native backend.
+The program currently runs only on Windows x64 and requires Python **3.14**, [uv](https://docs.astral.sh/uv/), and FFmpeg with the `libx264` encoder. Running from source also builds the native Rust Vulkan backend with Cargo (Visual Studio C++ tools or a windows-gnu Rust toolchain; see below). The optional legacy Qt RHI backend additionally needs the Visual Studio C++ tools and PySide6 pinned to **6.11.2**.
 
 Add the directory containing `ffmpeg.exe` and `ffprobe.exe` to `PATH`, then run the following in the project directory:
 
 ```powershell
 uv python install 3.14
 uv sync --extra dev --locked
-uv run --with py7zr python scripts/build_rhi.py --prepare --install
+uv run python scripts/build_rust.py --install
 ffmpeg -version
 ffprobe -version
 .\run.ps1
@@ -156,8 +159,12 @@ For more information, see [FLP / MIDI Import Guide](docs/importing.md).
 
 ## Development and Dependencies
 
+See [Contributing and PR guidelines](CONTRIBUTING.md) for title conventions,
+review criteria and required validation. Capture the actual desktop UI with
+`uv run python scripts/preview_ui.py --output artifacts/ui-preview`.
+
 ```powershell
-uv run python scripts/build_rhi.py --install
+uv run python scripts/build_rust.py --install
 uv run pytest -q
 uv run ruff check src tests scripts
 uv build --wheel

@@ -1,0 +1,11 @@
+* text=auto
+*.py text eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+*.wgsl text eol=lf
+*.md text eol=lf
+*.png binary
+*.otf binary
+*.zip binary
+*.dll binary
+*.wav binary

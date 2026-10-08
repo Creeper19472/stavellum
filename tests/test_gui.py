@@ -11,10 +11,18 @@ import wave
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QObject, QSettings, Qt, Signal
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtMultimedia import QMediaPlayer
-from PySide6.QtWidgets import QApplication, QComboBox, QGroupBox, QScrollArea
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFileDialog,
+    QGroupBox,
+    QMessageBox,
+    QScrollArea,
+)
 
 from stavellum import gui as gui_module
 from stavellum.background import BackgroundJob
@@ -148,6 +156,25 @@ def test_embedded_icon_survives_merge_split_and_reimport(window):
     assert window.document.icon_assets == {reference[6:]: asset}
     assert all(mapping.icon == reference for mapping in window.document.mappings[:2])
     assert all(not mapping.use_icon for mapping in window.document.mappings[:2])
+
+
+def test_reimport_keeps_saved_project_path_and_saves_back_to_original(window, tmp_path, monkeypatch):
+    path = tmp_path / "original.stproj"
+    save_document(window.document, path)
+    window.project_path = str(path)
+    source = copy.deepcopy(window.document.project)
+    source.name = "重新导入"
+    window._job = SimpleNamespace(reimporting=True)
+    try:
+        window._source_imported(source)
+    finally:
+        window._job = None
+    assert window.project_path == str(path)
+    assert window._dirty
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *args: pytest.fail("unexpected Save As"))
+    assert window.save_project()
+    assert load_document(path).project.name == "重新导入"
+    assert not window._dirty
 
 
 @pytest.mark.parametrize("accepted", [True, False])
@@ -550,14 +577,22 @@ def test_replacement_failure_keeps_previous_preview(window, monkeypatch, failure
     assert all(candidate.closed == 1 for candidate in candidates)
 
 
-def test_gui_prepares_vulkan_platform_before_constructing_the_window(monkeypatch):
-    from stavellum import qt
+def test_gui_prepares_vulkan_platform_before_constructing_the_window(app, monkeypatch):
+    from stavellum import qt, startup
 
     events = []
+    pending = []
+
+    def execute():
+        assert events == ["prepared", "covered"]
+        for callback in pending:
+            callback()
+        return 0
+
     application = SimpleNamespace(
         setApplicationName=lambda name: None, setOrganizationName=lambda name: None,
         setWindowIcon=lambda icon: None,
-        exec=lambda: 0,
+        exec=execute,
     )
 
     def prepare(settings):
@@ -565,19 +600,41 @@ def test_gui_prepares_vulkan_platform_before_constructing_the_window(monkeypatch
         events.append("prepared")
         return application
 
-    class Window:
-        def __init__(self, project_path):
+    class Cover(QObject):
+        finished = Signal()
+        close_requested = Signal()
+
+        def __init__(self):
+            super().__init__()
             assert events == ["prepared"]
-            assert project_path == "existing.stproj"
+            self.cancelled = False
+
+        def show(self):
+            events.append("covered")
+
+        def mark_ready(self):
+            events.append("ready")
+            self.finished.emit()
+
+    class Window:
+        def __init__(self):
+            assert events == ["prepared", "covered"]
             events.append("created")
 
         def _show_welcome(self):
             events.append("shown")
 
+        def open_path(self, project_path):
+            assert project_path == "existing.stproj"
+            assert events[-1] == "shown"
+            events.append("opened")
+
     monkeypatch.setattr(qt, "prepare_render_app", prepare)
     monkeypatch.setattr(gui_module, "MainWindow", Window)
+    monkeypatch.setattr(startup, "StartupSplash", Cover)
+    monkeypatch.setattr(gui_module.QTimer, "singleShot", lambda delay, callback: pending.append(callback))
     assert gui_module.run_gui("existing.stproj") == 0
-    assert events == ["prepared", "created", "shown"]
+    assert events == ["prepared", "covered", "created", "ready", "shown", "opened"]
 
 
 @pytest.mark.parametrize("name", ["fast", "medium", "slow", "very_slow"])
@@ -748,6 +805,58 @@ def test_seek_requests_absolute_frame_time(window):
     assert renderer.times == [2.0, 0.5, 2.0]
     assert not window.preview.frame.isNull()
     assert window.seek.value() == 2000
+
+
+def test_keyboard_seek_updates_frame_without_recursive_transport_updates(window, app):
+    times = []
+
+    def render(seconds):
+        times.append(seconds)
+        frame = QImage(320, 240, QImage.Format.Format_RGB32)
+        frame.fill(QColor("black"))
+        return frame
+
+    window.renderer = SimpleNamespace(
+        scene=SimpleNamespace(score_duration=window.document.project.duration_seconds,
+                              settings=window.document.settings),
+        render_frame=render,
+    )
+    window._update_actions()
+    window._update_transport()
+    window.show()
+    app.processEvents()
+    window.seek.setFocus()
+    QTest.keyClick(window.seek, Qt.Key.Key_Right)
+    assert window._position == pytest.approx(0.1)
+    assert times == [0.1]
+    QTest.keyClick(window.seek, Qt.Key.Key_PageUp)
+    assert window._position == pytest.approx(1.1)
+    assert times == [0.1, 1.1]
+    window._position = 2.0
+    window._update_transport()
+    assert window.seek.value() == 2000
+    assert times == [0.1, 1.1]
+
+
+def test_failed_preview_result_shows_failure_and_preserves_previous_preview(window, monkeypatch):
+    monkeypatch.setattr(QMessageBox, "exec", lambda box: QMessageBox.StandardButton.Ok)
+    previous = SimpleNamespace()
+    window.renderer = previous
+    document = window.document
+    window._job = SimpleNamespace(operation="compile", _cancel_requested_at=None,
+                                  deleteLater=lambda: None)
+    window.preview_status.setText("正在准备预览…")
+
+    def fail_to_apply(_scene):
+        raise RuntimeError("render initialization failed")
+
+    window._job_result(fail_to_apply, None)
+    window._job_finished()
+    assert "失败" in window.preview_status.text()
+    assert window.job_label.text() == "任务失败"
+    assert "render initialization failed" in window._last_error
+    assert window.renderer is previous and window.document is document
+    assert window.compile_button.isEnabled()
 
 
 class _ClockPlayer:

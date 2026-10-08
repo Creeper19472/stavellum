@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from .audio import AUDIO_FILE_FILTER
 from .branding import bind_application_icon
 from .models import PartMapping
+from .theme import ACCENT, BORDER, MUTED, apply_desktop_theme
 
 SOURCE_FILE_FILTER = "音乐来源 (*.flp *.mid *.midi);;FL Studio 工程 (*.flp);;MIDI 文件 (*.mid *.midi)"
 SOURCE_SUFFIXES = frozenset({".flp", ".mid", ".midi"})
@@ -103,46 +104,7 @@ class ProjectWizard(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._busy = False
         self._cancelling = False
-        self.setStyleSheet("""
-            QWidget#ProjectWizard, QWidget#ProjectWizard QWidget {
-                background: #17212b; color: #edf1f4;
-            }
-            QWidget#ProjectWizard QLabel, QWidget#ProjectWizard QCheckBox {
-                color: #edf1f4; background: transparent;
-            }
-            QWidget#ProjectWizard QLabel#WizardSubtitle,
-            QWidget#ProjectWizard QLabel#WizardDescription { color: #aebcc7; }
-            QWidget#ProjectWizard QFrame#WizardHeader { background: #20303d; border-radius: 8px; }
-            QWidget#ProjectWizard QLabel#WizardTitle { color: #f3dcc0; font-size: 22pt; font-weight: 600; }
-            QWidget#ProjectWizard QLabel#StepTitle { color: #f3dcc0; font-size: 16pt; font-weight: 600; }
-            QWidget#ProjectWizard QWidget#WizardStep { background: #17212b; }
-            QWidget#ProjectWizard QScrollArea { border: none; background: #17212b; }
-            QWidget#ProjectWizard QLineEdit,
-            QWidget#ProjectWizard QPlainTextEdit {
-                background: #20303d; color: #edf1f4; border: 1px solid #435360;
-                border-radius: 5px; padding: 8px; selection-background-color: #906f49;
-            }
-            QWidget#ProjectWizard QLineEdit:focus { border-color: #d4ab77; }
-            QWidget#ProjectWizard QPushButton,
-            QWidget#ProjectWizard QToolButton {
-                background: #283947; color: #edf1f4; border: 1px solid #435360;
-                border-radius: 5px; padding: 8px 16px;
-            }
-            QWidget#ProjectWizard QPushButton:hover,
-            QWidget#ProjectWizard QToolButton:hover { background: #354b5d; border-color: #d4ab77; }
-            QWidget#ProjectWizard QPushButton:disabled { color: #798791; border-color: #344451; }
-            QWidget#ProjectWizard QPushButton#WizardPrimary {
-                background: #f3dcc0; color: #17212b; border-color: #f3dcc0; font-weight: 600;
-            }
-            QWidget#ProjectWizard QPushButton#WizardPrimary:hover { background: #fbe9d4; }
-            QWidget#ProjectWizard QPushButton#WizardPrimary:disabled { background: #52606a; color: #a6afb5; }
-            QWidget#ProjectWizard QLabel#WizardError { color: #ffc2b2; }
-            QWidget#ProjectWizard QLabel#WizardSummary {
-                background: #20303d; border: 1px solid #435360; border-radius: 7px; padding: 14px;
-            }
-            QWidget#ProjectWizard QCheckBox { spacing: 9px; font-weight: 600; }
-            QWidget#ProjectWizard QCheckBox::indicator { width: 18px; height: 18px; }
-        """)
+        apply_desktop_theme(self)
         root = QVBoxLayout(self)
         root.setContentsMargins(28, 24, 28, 24)
         root.setSpacing(16)
@@ -376,8 +338,8 @@ class ProjectWizard(QWidget):
         index = self.steps.currentIndex()
         for number, label in enumerate(self.step_labels):
             label.setStyleSheet(
-                "color: #f3dcc0; font-weight: 600; padding: 8px; border-bottom: 2px solid #d4ab77;"
-                if number == index else "color: #aebcc7; padding: 8px; border-bottom: 2px solid #435360;"
+                f"color: {ACCENT}; font-weight: 600; padding: 8px; border-bottom: 2px solid {ACCENT};"
+                if number == index else f"color: {MUTED}; padding: 8px; border-bottom: 2px solid {BORDER};"
             )
         self.back_button.setEnabled(not self._busy and index > 0)
         self.skip_button.setVisible(index == 1)

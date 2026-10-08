@@ -9,6 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from native_support import require_vulkan_device
 from PySide6.QtGui import QColor, QImage
 from test_render import colored_activity_document, rendered_document
 
@@ -348,6 +349,7 @@ def test_real_rhi_channels_blend_direction_eviction_random_access_and_ownership(
     dll = library_path()
     if not dll.exists():
         pytest.skip("Native Vulkan renderer DLL has not been built")
+    require_vulkan_device()
     result = subprocess.run([sys.executable, "-c", REAL_SCRIPT], cwd=root, capture_output=True,
                             text=True, encoding="utf-8", errors="replace", timeout=90,
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))

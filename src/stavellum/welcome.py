@@ -5,8 +5,13 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, QSettings, QSize, Qt, Signal
-from PySide6.QtGui import QCloseEvent, QColor, QFont, QPainter, QPainterPath, QPen
+from PySide6.QtCore import QRectF, QSettings, QSize, Qt, Signal
+from PySide6.QtGui import (
+    QCloseEvent,
+    QColor,
+    QFont,
+    QPainter,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -16,15 +21,25 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
+    QSizeGrip,
     QStackedWidget,
-    QTabWidget,
+    QStyle,
+    QStyledItemDelegate,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from . import __version__
-from .branding import APPLICATION_DESCRIPTION, bind_application_icon, logo_pixmap
+from .branding import APPLICATION_DESCRIPTION, bind_application_icon
+from .theme import DESKTOP_STYLESHEET, apply_desktop_theme, desktop_icon
+
+# The palette echoes the editor's dark chrome with the product's warm accent.
+_PANEL_HOVER = "#212b37"
+_PANEL_BORDER = "#2a3441"
+_TEXT = "#e8ecf1"
+_MUTED = "#a4b2c3"
+_ACCENT = "#edc398"
 
 
 class RecentProjects:
@@ -71,120 +86,47 @@ class RecentProjects:
         self.settings.sync()
 
 
-class _MusicBanner(QWidget):
-    """Branded banner with a packaged logo and resolution-independent music art."""
+class _RecentProjectDelegate(QStyledItemDelegate):
+    """Keep project names readable and elide long paths within their own row."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._logo = logo_pixmap()
-        self.setMinimumHeight(150)
-        self.setMaximumHeight(210)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        self.setAccessibleName(f"Stavellum {__version__}，{APPLICATION_DESCRIPTION}")
+        self._file_icon = desktop_icon("file")
 
-    def sizeHint(self) -> QSize:
-        return QSize(960, 190)
+    def sizeHint(self, option, index) -> QSize:
+        return QSize(0, 64)
 
-    @staticmethod
-    def _note(painter: QPainter, x: float, y: float, up: bool = True) -> None:
+    def paint(self, painter, option, index) -> None:
         painter.save()
-        painter.translate(x, y)
-        painter.rotate(-18)
-        painter.setBrush(QColor("#183844"))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(QRectF(-7, -4, 14, 8))
-        painter.restore()
-        painter.setPen(QPen(QColor("#183844"), 2.4))
-        direction = -1 if up else 1
-        stem_x = x + 6 if up else x - 6
-        painter.drawLine(QPointF(stem_x, y), QPointF(stem_x, y + direction * 29))
-
-    def paintEvent(self, event) -> None:
-        painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        painter.fillRect(self.rect(), QColor("#fff4e9"))
-        # Preserve the shapes' proportions while adapting their horizontal anchors.
-        scale = self.height() / 190
-        painter.scale(scale, scale)
-        view_width = self.width() / scale
-        split = view_width * 0.4
-        painter.fillRect(QRectF(0, 0, split, 190), QColor("#f1cfaa"))
-        ink = QColor("#183844")
-        painter.setPen(ink)
-        title = QFont("Georgia")
-        title.setPixelSize(35)
-        painter.setFont(title)
-        title_width = painter.fontMetrics().horizontalAdvance("Stavellum")
-        title.setPixelSize(max(20, min(35, int(35 * (split - 60) / title_width))))
-        painter.setFont(title)
-        painter.drawPixmap(QRectF(30, 12, 82, 82), self._logo, QRectF(self._logo.rect()))
-        painter.drawText(QRectF(30, 100, split - 60, 42), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "Stavellum")
-        subtitle = QFont(self.font())
-        subtitle.setPixelSize(17)
-        painter.setFont(subtitle)
-        caption_width = painter.fontMetrics().horizontalAdvance(APPLICATION_DESCRIPTION)
-        subtitle.setPixelSize(max(12, min(17, int(17 * 2 * (split - 64) / caption_width))))
-        painter.setFont(subtitle)
-        caption = APPLICATION_DESCRIPTION
-        if painter.fontMetrics().horizontalAdvance(caption) > split - 64:
-            caption = caption.replace("的", "的\n", 1)
-        painter.drawText(
-            QRectF(32, 143, split - 64, 42),
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap,
-            caption,
-        )
-        painter.setPen(QPen(QColor("#183844"), 1.0))
-        for index in range(5):
-            y = 121 + index * 7
-            painter.drawLine(QPointF(split + 32, y), QPointF(view_width - 46, y))
-        note_spacing = min(48, (view_width - split - 78) * 0.09)
-        for index, y in enumerate((142, 128, 135, 121, 114)):
-            x = split + 63 + index * note_spacing
-            self._note(painter, x, y)
-        # A violin silhouette with scroll, strings, bridge, and a diagonal bow.
-        painter.save()
-        painter.translate(view_width - 128, 98)
-        painter.rotate(22)
-        body = QPainterPath()
-        body.moveTo(-9, -37)
-        body.cubicTo(-34, -37, -39, -12, -20, -7)
-        body.cubicTo(-10, -4, -13, 8, -24, 11)
-        body.cubicTo(-49, 28, -30, 55, 0, 55)
-        body.cubicTo(30, 55, 49, 28, 24, 11)
-        body.cubicTo(13, 8, 10, -4, 20, -7)
-        body.cubicTo(39, -12, 34, -37, 9, -37)
-        body.closeSubpath()
-        painter.setPen(QPen(ink, 2))
-        painter.setBrush(QColor("#e2ac70"))
-        painter.drawPath(body)
-        painter.setBrush(ink)
-        painter.drawRoundedRect(QRectF(-4, -76, 8, 113), 2, 2)
-        painter.drawEllipse(QRectF(-8, -90, 16, 16))
-        painter.setPen(QPen(QColor("#fff4e9"), 0.8))
-        for x in (-2, 0, 2):
-            painter.drawLine(QPointF(x, -78), QPointF(x, 39))
-        painter.setPen(QPen(ink, 3))
-        painter.drawLine(QPointF(-9, 13), QPointF(9, 13))
-        for side in (-1, 1):
-            sound_hole = QPainterPath()
-            sound_hole.moveTo(side * 15, -3)
-            sound_hole.cubicTo(side * 25, -7, side * 9, 27, side * 19, 23)
-            painter.drawPath(sound_hole)
-        painter.setPen(QPen(ink, 3))
-        painter.drawLine(QPointF(40, -81), QPointF(54, 62))
-        painter.setPen(QPen(QColor("#ba8956"), 1.2))
-        painter.drawLine(QPointF(45, -81), QPointF(59, 62))
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
+        rect = QRectF(option.rect).adjusted(1, 3, -1, -3)
+        painter.setPen(Qt.PenStyle.NoPen)
+        if selected or hovered:
+            painter.setBrush(QColor(_PANEL_HOVER))
+            painter.drawRoundedRect(rect, 6, 6)
+        title = str(index.data(Qt.ItemDataRole.DisplayRole)).split("\n", 1)[0]
+        path = str(index.data(Qt.ItemDataRole.UserRole))
+        text_rect = option.rect.adjusted(46, 10, -16, -10)
+        self._file_icon.paint(painter, option.rect.left() + 14, option.rect.top() + 22, 18, 18)
+        font = QFont(option.font)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor(_TEXT if option.state & QStyle.StateFlag.State_Enabled else _MUTED))
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
+                         painter.fontMetrics().elidedText(title, Qt.TextElideMode.ElideRight, text_rect.width()))
+        font.setBold(False)
+        font.setPixelSize(11)
+        painter.setFont(font)
+        painter.setPen(QColor(_MUTED))
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft,
+                         painter.fontMetrics().elidedText(path, Qt.TextElideMode.ElideMiddle, text_rect.width()))
         painter.restore()
-        painter.setPen(ink)
-        subtitle.setPixelSize(13)
-        painter.setFont(subtitle)
-        painter.drawText(QRectF(view_width - 135, 164, 105, 20), Qt.AlignmentFlag.AlignRight,
-                         f"v{__version__}")
 
 
 class WelcomePage(QWidget):
-    """Independent welcome window; MainWindow owns document and application lifetime."""
+    """Frameless landing window; MainWindow owns document and application lifetime."""
 
     new_requested = Signal()
     open_requested = Signal()
@@ -194,100 +136,278 @@ class WelcomePage(QWidget):
     close_requested = Signal()
     cancel_task_requested = Signal()
 
+    _GUIDE_SECTIONS = (
+        ("从来源到谱面", "创建新工程，选择 FLP 或 MIDI；可选原曲音频，再选择自动处理方案。"),
+        ("检查来源与时间", "导入默认使用第一个 Arrangement。进入编辑器后可调整编曲、速度、拍号和音频同步；FLP 未确认固定时钟时，需人工核对速度与拍号。"),
+        ("整理分谱", "检查建议的乐器分组，在分谱设置中调整音符简化、八度移位和演奏法识别。"),
+        ("预览与导出", "生成谱面预览，保存 .stproj 工程，或导出分谱和滚动谱视频。"),
+    )
+    _ABOUT_SECTIONS = (
+        (f"Stavellum  {__version__}", APPLICATION_DESCRIPTION),
+        ("一个工程，完整保留", "工程保存来源信息、分谱、原曲音频路径和渲染设置，便于继续编辑和再次导出。"),
+        ("开源许可", "Stavellum 使用 GNU GPL v3 或更新版本。第三方库与字体保留各自的许可证；完整文本及来源随发行包提供。"),
+    )
+
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent, Qt.WindowType.Window)
+        super().__init__(parent, Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.setWindowTitle("欢迎 · Stavellum")
         bind_application_icon(self)
-        self.resize(1000, 700)
+        self.resize(1060, 720)
+        self.setMinimumSize(900, 620)
         self._allow_close = False
         self._busy = False
         self._has_document = False
         self.setObjectName("WelcomePage")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet("""
-            QWidget#WelcomePage, QWidget#WelcomePage QWidget {
-                background: #242c35; color: #e6e9ed;
-            }
-            QWidget#WelcomePage QLabel, QWidget#WelcomePage QTabWidget,
-            QWidget#WelcomePage QListWidget, QWidget#WelcomePage QScrollArea {
-                color: #e6e9ed; background: #242c35;
-            }
-            QWidget#WelcomePage QTabWidget::pane { border: 1px solid #42505b; }
-            QWidget#WelcomePage QTabBar::tab {
-                background: #242c35; color: #bbc5cf; padding: 10px 20px;
-                border-bottom: 3px solid transparent;
-            }
-            QWidget#WelcomePage QTabBar::tab:selected {
-                color: #ffffff; border-bottom: 3px solid #e6b57e;
-            }
-            QWidget#WelcomePage QListWidget { border: 0; outline: 0; }
-            QWidget#WelcomePage QListWidget::item { padding: 12px 10px; }
-            QWidget#WelcomePage QListWidget#ProjectCategories::item { padding: 6px 10px; }
-            QWidget#WelcomePage QListWidget::item:selected {
-                background: #385263; color: #ffffff;
-            }
-            QWidget#WelcomePage QPushButton {
-                color: #e6e9ed; background: #303e49; border: 1px solid #52616b;
-                border-radius: 4px; padding: 8px 14px;
-            }
-            QWidget#WelcomePage QPushButton:hover { background: #425665; }
-            QWidget#WelcomePage QPushButton:disabled { color: #7a8893; }
-            QWidget#WelcomePage QPushButton#CreateProject {
-                color: #202d35; background: #edc398; border-color: #edc398;
-            }
-            QWidget#WelcomePage QPushButton#CreateProject:hover { background: #f7d6b3; }
-            QWidget#WelcomePage QPushButton#CreateProject:disabled {
-                color: #697078; background: #938475; border-color: #938475;
-            }
+        apply_desktop_theme(self)
+        self.setStyleSheet(DESKTOP_STYLESHEET + f"""
+            QWidget#WelcomePage {{ background: #10161e; }}
+            QLabel#StartBrand {{ color: {_MUTED}; font-size: 14px; }}
+            QLabel#StartTitle {{ color: {_TEXT}; font-size: 22px; font-weight: 600; }}
+            QLabel#SectionHeading {{ color: {_MUTED}; font-size: 12px; }}
+            QToolButton#StartAction {{
+                background: transparent; border: 1px solid {_PANEL_BORDER};
+                border-radius: 6px; padding: 5px 12px;
+            }}
+            QToolButton#StartAction:hover {{ background: {_PANEL_HOVER}; border-color: #718197; }}
+            QToolButton#StartAction:focus {{ border-color: {_ACCENT}; }}
+            QToolButton#StartAction:disabled {{ color: #768496; border-color: {_PANEL_BORDER}; }}
+            QPushButton#LinkButton {{
+                background: transparent; border: 1px solid transparent;
+                color: {_MUTED}; padding: 4px 2px;
+            }}
+            QPushButton#LinkButton:hover {{ color: {_TEXT}; }}
+            QPushButton#LinkButton:focus {{ border-color: {_ACCENT}; }}
+            QToolButton#WindowButton {{
+                background: transparent; border: 0; border-radius: 5px;
+                color: {_MUTED}; font-size: 15px; padding: 0;
+            }}
+            QToolButton#WindowButton:hover {{ background: {_PANEL_HOVER}; color: {_TEXT}; }}
+            QListWidget#RecentList {{ background: transparent; border: 0; padding: 0; }}
         """)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 12)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(18, 10, 18, 16)
+        root.setSpacing(0)
+        chrome = QHBoxLayout()
+        chrome.setSpacing(4)
+        self.header = QLabel("Stavellum")
+        self.header.setObjectName("StartBrand")
+        self.header.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        chrome.addWidget(self.header)
+        chrome.addStretch(1)
+        self.minimize_button = self._window_button("—", "最小化", self.showMinimized)
+        self.close_button = self._window_button("×", "关闭", self._close)
+        chrome.addWidget(self.minimize_button)
+        chrome.addWidget(self.close_button)
+        root.addLayout(chrome)
+        self.pages = QStackedWidget()
+        root.addWidget(self.pages, 1)
+        self.pages.addWidget(self._build_main_page())
+        self.pages.addWidget(self._text_page(self._GUIDE_SECTIONS, "使用指南"))
+        self.pages.addWidget(self._text_page(self._ABOUT_SECTIONS, "关于"))
+        self._grip = QSizeGrip(self)
+        self._grip.setFixedSize(18, 18)
+        self._grip.setStyleSheet("background: transparent;")
+
+    # --- painting and window chrome -------------------------------------
+
+    def mousePressEvent(self, event) -> None:
+        if (event.button() == Qt.MouseButton.LeftButton
+                and event.position().y() < 52 and self.windowHandle() is not None):
+            self.windowHandle().startSystemMove()
+        super().mousePressEvent(event)
+
+    def _window_button(self, glyph: str, tip: str, handler) -> QToolButton:
+        button = QToolButton()
+        button.setObjectName("WindowButton")
+        button.setText(glyph)
+        button.setToolTip(tip)
+        button.setAccessibleName(tip)
+        button.setFixedSize(30, 28)
+        button.clicked.connect(handler)
+        return button
+
+    def _close(self) -> None:
+        self.close()
+
+    # --- page construction -----------------------------------------------
+
+    def _start_action(self, icon: str, title: str, handler) -> QToolButton:
+        button = QToolButton()
+        button.setObjectName("StartAction")
+        button.setText(title)
+        button.setIcon(desktop_icon(icon))
+        button.setIconSize(QSize(18, 18))
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        button.setFixedHeight(34)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setToolTip(title)
+        button.setAccessibleName(title)
+        button.clicked.connect(handler)
+        return button
+
+    def _build_main_page(self) -> QWidget:
+        page = QWidget()
+        page_layout = QHBoxLayout(page)
+        page_layout.setContentsMargins(36, 32, 36, 6)
+        workspace = QWidget()
+        workspace.setMinimumWidth(640)
+        workspace.setMaximumWidth(780)
+        page_layout.addStretch(1)
+        page_layout.addWidget(workspace, 3)
+        page_layout.addStretch(1)
+        layout = QVBoxLayout(workspace)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        self.banner = _MusicBanner(self)
-        layout.addWidget(self.banner)
-        self.tabs = QTabWidget()
-        self.tabs.addTab(self._build_start_page(), "开始使用")
-        self.tabs.addTab(self._text_page((
-            ("从来源到谱面", "创建新工程，选择 FLP 或 MIDI；可选原曲音频，再选择自动处理方案。"),
-            ("检查来源与时间", "导入默认使用第一个 Arrangement。进入编辑器后可调整编曲、速度、拍号和音频同步；FLP 未确认固定时钟时，需人工核对速度与拍号。"),
-            ("整理分谱", "检查建议的乐器分组，在分谱设置中调整音符简化、八度移位和演奏法识别。"),
-            ("预览与导出", "生成谱面预览，保存 .stproj 工程，或导出分谱和滚动谱视频。"),
-        )), "使用指南")
-        self.tabs.addTab(self._text_page((
-            (f"Stavellum  {__version__}", APPLICATION_DESCRIPTION),
-            ("一个工程，完整保留", "工程保存来源信息、分谱、原曲音频路径和渲染设置，便于继续编辑和再次导出。"),
-            ("开源许可", "Stavellum 使用 GNU GPL v3 或更新版本。第三方库与字体保留各自的许可证；完整文本及来源随发行包提供。"),
-        )), "关于")
-        layout.addWidget(self.tabs, 1)
-        buttons = QHBoxLayout()
-        buttons.setContentsMargins(12, 12, 12, 0)
-        buttons.setSpacing(24)
+
+        title = QLabel("开始创作")
+        title.setObjectName("StartTitle")
+        layout.addWidget(title)
+        layout.addSpacing(6)
+        subtitle = QLabel("新建工程，或继续最近的作品。")
+        subtitle.setObjectName("Tagline")
+        layout.addWidget(subtitle)
+        layout.addSpacing(22)
+
+        actions = QHBoxLayout()
+        actions.setSpacing(8)
+        self.new_button = self._start_action("new", "新建工程", lambda: self._emit(self.new_requested))
+        self.new_button.setShortcut("Ctrl+N")
+        self.new_button.setToolTip("新建工程 (Ctrl+N)")
+        self.open_button = self._start_action("open", "打开工程", lambda: self._emit(self.open_requested))
+        self.open_button.setShortcut("Ctrl+O")
+        self.open_button.setToolTip("打开工程 (Ctrl+O)")
+        actions.addWidget(self.new_button)
+        actions.addWidget(self.open_button)
+        actions.addStretch(1)
+        self.demo_button = QPushButton("试用示例")
+        self.demo_button.setObjectName("LinkButton")
+        self.demo_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.demo_button.clicked.connect(lambda: self._emit(self.demo_requested))
+        actions.addWidget(self.demo_button)
+        layout.addLayout(actions)
+        layout.addSpacing(28)
+
+        heading_row = QHBoxLayout()
+        self.list_heading = QLabel("最近工程")
+        self.list_heading.setObjectName("SectionHeading")
+        heading_row.addWidget(self.list_heading)
+        heading_row.addStretch(1)
         self.resume_button = QPushButton("返回编辑器")
+        self.resume_button.setObjectName("LinkButton")
+        self.resume_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.resume_button.clicked.connect(lambda: self._emit(self.resume_requested))
         self.resume_button.hide()
-        self.open_button = QPushButton("打开工程…")
-        self.open_button.clicked.connect(lambda: self._emit(self.open_requested))
-        self.new_button = QPushButton("创建新工程")
-        self.new_button.setObjectName("CreateProject")
-        self.new_button.clicked.connect(lambda: self._emit(self.new_requested))
-        buttons.addWidget(self.resume_button)
-        buttons.addStretch(1)
-        buttons.addWidget(self.open_button)
-        buttons.addWidget(self.new_button)
-        layout.addLayout(buttons)
+        heading_row.addWidget(self.resume_button)
+        layout.addLayout(heading_row)
+        layout.addSpacing(8)
+
+        self.recent_list = QListWidget()
+        self.recent_list.setObjectName("RecentList")
+        self.recent_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.recent_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.recent_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.recent_list.setItemDelegate(_RecentProjectDelegate(self.recent_list))
+        self.recent_list.setAccessibleName("最近工程")
+        self.recent_list.setSpacing(0)
+        self.recent_list.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.recent_list.itemActivated.connect(self._activate_recent)
+        self.recent_list.currentItemChanged.connect(self._selection_changed)
+        layout.addWidget(self.recent_list, 1)
+
+        self.empty_label = QLabel("还没有最近工程\n新建工程，或打开已有的 .stproj 文件。")
+        self.empty_label.setObjectName("Tagline")
+        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_label.setWordWrap(True)
+        layout.addWidget(self.empty_label, 1)
+        layout.addSpacing(10)
+
+        footer = QHBoxLayout()
+        self.path_label = QLabel("成功打开或保存的工程会出现在这里。")
+        self.path_label.setObjectName("Tagline")
+        self.path_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.path_label.setWordWrap(True)
+        footer.addWidget(self.path_label, 1)
+        self.selected_button = self._start_action("open", "打开所选", self._activate_selection)
+        self.selected_button.setEnabled(False)
+        footer.addWidget(self.selected_button)
+        layout.addLayout(footer)
+        layout.addSpacing(16)
+
         self.task_status = QWidget()
-        task_layout = QHBoxLayout(self.task_status)
+        task_inner = QHBoxLayout(self.task_status)
+        task_inner.setContentsMargins(0, 0, 0, 0)
+        task_inner.setSpacing(12)
         self.job_label = QLabel("就绪")
+        self.job_label.setObjectName("Tagline")
         self.progress = QProgressBar()
         self.progress.setRange(0, 1000)
         self.progress.setTextVisible(False)
         self.cancel_task_button = QPushButton("取消任务")
         self.cancel_task_button.clicked.connect(self.cancel_task_requested.emit)
-        task_layout.addWidget(self.job_label, 2)
-        task_layout.addWidget(self.progress, 1)
-        task_layout.addWidget(self.cancel_task_button)
+        task_inner.addWidget(self.job_label, 0)
+        task_inner.addWidget(self.progress, 1)
+        task_inner.addWidget(self.cancel_task_button, 0)
         layout.addWidget(self.task_status)
         self.task_status.hide()
+
+        bottom = QHBoxLayout()
+        bottom.setSpacing(18)
+        guide_button = QPushButton("使用指南")
+        guide_button.setObjectName("LinkButton")
+        guide_button.clicked.connect(lambda: self.pages.setCurrentIndex(1))
+        about_button = QPushButton("关于")
+        about_button.setObjectName("LinkButton")
+        about_button.clicked.connect(lambda: self.pages.setCurrentIndex(2))
+        bottom.addWidget(guide_button)
+        bottom.addWidget(about_button)
+        bottom.addStretch(1)
+        self.version_label = QLabel(f"v{__version__}")
+        self.version_label.setObjectName("Tagline")
+        bottom.addWidget(self.version_label)
+        layout.addLayout(bottom)
+        return page
+
+    def _text_page(self, sections: tuple[tuple[str, str], ...], title: str) -> QScrollArea:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        content = QWidget()
+        content.setObjectName("TextPage")
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(30, 26, 30, 20)
+        layout.setSpacing(14)
+        back = QPushButton("← 返回")
+        back.setObjectName("LinkButton")
+        back.setCursor(Qt.CursorShape.PointingHandCursor)
+        back.clicked.connect(lambda: self.pages.setCurrentIndex(0))
+        layout.addWidget(back)
+        heading = QLabel(title)
+        heading.setObjectName("PanelTitle")
+        heading_font = heading.font()
+        heading_font.setPointSize(18)
+        heading_font.setBold(True)
+        heading.setFont(heading_font)
+        layout.addSpacing(6)
+        layout.addWidget(heading)
+        layout.addSpacing(6)
+        for section_title, text in sections:
+            section = QLabel(section_title)
+            font = section.font()
+            font.setBold(True)
+            section.setFont(font)
+            section.setWordWrap(True)
+            body = QLabel(text)
+            body.setObjectName("Tagline")
+            body.setWordWrap(True)
+            layout.addWidget(section)
+            layout.addWidget(body)
+        layout.addStretch()
+        scroll.setWidget(content)
+        return scroll
+
+    # --- behavior ---------------------------------------------------------
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._allow_close:
@@ -298,95 +418,19 @@ class WelcomePage(QWidget):
             # The shared exit handler may approve this very close request.
             event.setAccepted(self._allow_close)
 
-    def _text_page(self, sections: tuple[tuple[str, str], ...]) -> QScrollArea:
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        content = QWidget()
-        layout = QVBoxLayout(content)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(16)
-        for title, text in sections:
-            heading = QLabel(title)
-            font = heading.font()
-            font.setBold(True)
-            heading.setFont(font)
-            heading.setWordWrap(True)
-            body = QLabel(text)
-            body.setWordWrap(True)
-            layout.addWidget(heading)
-            layout.addWidget(body)
-        layout.addStretch()
-        scroll.setWidget(content)
-        return scroll
-
-    def _build_start_page(self) -> QWidget:
-        page = QWidget()
-        layout = QHBoxLayout(page)
-        layout.setContentsMargins(8, 12, 14, 12)
-        layout.setSpacing(16)
-        self.categories = QListWidget()
-        self.categories.setObjectName("ProjectCategories")
-        self.categories.addItems(["最近工程", "示例工程"])
-        self.categories.setFixedWidth(116)
-        self.categories.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.categories.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.categories.setAccessibleName("工程分类")
-        layout.addWidget(self.categories)
-        column = QVBoxLayout()
-        self.list_heading = QLabel("最近打开的工程")
-        heading_font = self.list_heading.font()
-        heading_font.setBold(True)
-        self.list_heading.setFont(heading_font)
-        column.addWidget(self.list_heading)
-        self.lists = QStackedWidget()
-        self.lists.setMinimumHeight(80)
-        self.lists.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
-        self.recent_list = QListWidget()
-        self.recent_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.recent_list.setAccessibleName("最近工程")
-        self.recent_list.itemActivated.connect(self._activate_recent)
-        self.recent_list.currentItemChanged.connect(self._selection_changed)
-        recent_page = QWidget()
-        recent_layout = QVBoxLayout(recent_page)
-        recent_layout.setContentsMargins(0, 0, 0, 0)
-        self.empty_label = QLabel("还没有最近工程。\n创建新工程，或打开已有的 .stproj 工程开始。")
-        self.empty_label.setWordWrap(True)
-        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        recent_layout.addWidget(self.empty_label)
-        recent_layout.addWidget(self.recent_list, 1)
-        self.lists.addWidget(recent_page)
-        self.demo_list = QListWidget()
-        self.demo_list.addItem("三乐器示例\n体验弦乐、Pizz 奏法与钟琴的完整工程")
-        self.demo_list.setWordWrap(True)
-        self.demo_list.setAccessibleName("示例工程")
-        self.demo_list.itemActivated.connect(lambda _item: self._emit(self.demo_requested))
-        self.demo_list.currentItemChanged.connect(self._selection_changed)
-        self.demo_list.setCurrentRow(0)
-        self.lists.addWidget(self.demo_list)
-        column.addWidget(self.lists, 1)
-        self.path_label = QLabel("成功打开或保存的工程会出现在这里。")
-        self.path_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.path_label.setWordWrap(True)
-        self.path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        column.addWidget(self.path_label)
-        self.selected_button = QPushButton("打开所选工程")
-        self.selected_button.clicked.connect(self._activate_selection)
-        self.selected_button.setEnabled(False)
-        column.addWidget(self.selected_button, 0, Qt.AlignmentFlag.AlignLeft)
-        layout.addLayout(column, 1)
-        self.categories.currentRowChanged.connect(self._category_changed)
-        self.categories.setCurrentRow(0)
-        return page
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._grip.move(self.width() - 18, self.height() - 18)
 
     def set_recent_projects(self, paths: list[str]) -> None:
         self.recent_list.clear()
         for path in paths:
             source = Path(path)
-            text = source.name
+            name = source.name
             if not source.is_file():
-                text += "  （文件已移动或删除）"
-            item = QListWidgetItem(text)
+                name += "  （文件已移动或删除）"
+            item = QListWidgetItem()
+            item.setText(f"{name}\n{path}")
             item.setData(Qt.ItemDataRole.UserRole, str(path))
             item.setToolTip(str(path))
             self.recent_list.addItem(item)
@@ -402,10 +446,13 @@ class WelcomePage(QWidget):
         self.resume_button.setEnabled(has_document and not self._busy)
 
     def set_busy(self, busy: bool) -> None:
+        # The task bar (cancel button included) lives inside the main page,
+        # so only the individual action controls are disabled — never the
+        # page stack that hosts the running task's progress.
         self._busy = busy
-        self.tabs.setEnabled(not busy)
-        self.new_button.setEnabled(not busy)
-        self.open_button.setEnabled(not busy)
+        for control in (self.new_button, self.open_button, self.demo_button,
+                        self.selected_button, self.recent_list):
+            control.setEnabled(not busy)
         self.resume_button.setEnabled(self._has_document and not busy)
         self._selection_changed()
 
@@ -413,32 +460,23 @@ class WelcomePage(QWidget):
         if not self._busy:
             signal.emit()
 
-    def _category_changed(self, row: int) -> None:
-        self.lists.setCurrentIndex(max(0, row))
-        self.list_heading.setText("示例工程" if row == 1 else "最近打开的工程")
-        self._selection_changed()
-
     def _selection_changed(self, *_args) -> None:
         # Signals may arrive while the page itself is still being built.
         if not hasattr(self, "selected_button"):
             return
-        demo = self.lists.currentIndex() == 1
-        item = (self.demo_list if demo else self.recent_list).currentItem()
+        item = self.recent_list.currentItem()
         self.selected_button.setEnabled(item is not None and not self._busy)
-        self.selected_button.setText("打开示例工程" if demo else "打开所选工程")
-        if demo:
-            self.path_label.setText("自动生成示例工程、MIDI 和合成音频。")
-        elif item is not None:
-            self.path_label.setText(item.data(Qt.ItemDataRole.UserRole))
+        if item is not None:
+            self.path_label.setText("双击工程，或按 Enter 打开。")
+            self.path_label.setToolTip(item.data(Qt.ItemDataRole.UserRole))
         else:
             self.path_label.setText("成功打开或保存的工程会出现在这里。")
+            self.path_label.setToolTip("")
 
     def _activate_recent(self, item: QListWidgetItem) -> None:
         if not self._busy:
             self.project_requested.emit(item.data(Qt.ItemDataRole.UserRole))
 
     def _activate_selection(self) -> None:
-        if self.lists.currentIndex() == 1:
-            self._emit(self.demo_requested)
-        elif (item := self.recent_list.currentItem()) is not None:
+        if (item := self.recent_list.currentItem()) is not None:
             self._activate_recent(item)

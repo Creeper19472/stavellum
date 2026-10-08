@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from native_support import require_vulkan_device
 
 from stavellum._rhi import library_path
 
@@ -156,7 +157,8 @@ assert statistics["readback_staging_peak_bytes"] == 8 * size
 assert statistics["readback_buffer_peak_bytes"] == 8 * size
 assert statistics["memory_copy_bytes"] == len(patterns) * size
 assert statistics["inplace_format_conversion_bytes"] == (
-    statistics["owned_readback_frame_count"] * size if statistics["readback_format"] == "RGBA8" else 0)
+    statistics["owned_readback_frame_count"] * size
+    if statistics["readback_format"] == "RGBA8" else 0)
 assert dll.sprhi_remove(handle, 1) == 0 and dll.sprhi_remove(handle, 2) == 0
 assert dll.sprhi_close(handle) == 0
 
@@ -185,6 +187,7 @@ print(json.dumps(statistics), flush=True)
 def test_native_batch_preserves_pixels_atomic_errors_and_independent_cpu_owners(rgba, monkeypatch):
     if not library_path().exists():
         pytest.skip("Native Vulkan renderer DLL has not been built")
+    require_vulkan_device()
     if rgba:
         monkeypatch.setenv("STAVELLUM_RHI_RGBA_READBACK", "1")
     else:
